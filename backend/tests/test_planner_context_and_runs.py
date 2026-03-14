@@ -3,9 +3,9 @@
 from fastapi.testclient import TestClient
 
 
-def test_planner_uses_persisted_context_and_exposes_latest_run(client: TestClient) -> None:
+def test_planner_uses_persisted_context_and_exposes_latest_run(client: TestClient, auth_headers) -> None:
     user_id = "ctx-user-1"
-    headers = {"Authorization": "Bearer fake-token", "X-Test-User-Id": user_id}
+    headers = auth_headers(user_id)
 
     goals_payload = {
         "calories_target": 2100,
@@ -47,6 +47,6 @@ def test_planner_uses_persisted_context_and_exposes_latest_run(client: TestClien
     assert latest_run.status_code == 200
     run_body = latest_run.json()
     assert run_body["status"] == "COMPLETED"
-    assert run_body["mode"] in ["adk", "fallback"]
+    assert run_body["mode"] == "railtracks-agentic"
     assert isinstance(run_body["trace_notes"], list)
     assert run_body["trace_notes"]

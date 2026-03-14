@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import time
+from pathlib import Path
 
 import httpx
 from fastapi import Depends, HTTPException, Request, status
@@ -22,9 +24,38 @@ def _extract_bearer_token(request: Request) -> str:
     return auth_header.split(" ", 1)[1].strip()
 
 
-def _dev_auth_context(request: Request) -> AuthContext:
-    user_id = request.headers.get("X-Test-User-Id", "user-1")
-    return AuthContext(user_id=user_id, email="dev@example.com")
+def _resolve_local_jwks(settings: Settings) -> dict | None:
+    """Resolve local JWKS for offline/strict local verification."""
+
+    if settings.cognito_jwks_json:
+        try:
+            payload = json.loads(settings.cognito_jwks_json)
+            if isinstance(payload, dict):
+                return payload
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid COGNITO_JWKS_JSON payload",
+            ) from exc
+
+    if settings.cognito_jwks_path:
+        path = Path(settings.cognito_jwks_path).expanduser()
+        if not path.exists():
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Configured COGNITO_JWKS_PATH does not exist",
+            )
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(payload, dict):
+                return payload
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid JWKS JSON file at COGNITO_JWKS_PATH",
+            ) from exc
+
+    return None
 
 
 def _resolve_jwks_url(settings: Settings) -> str:
@@ -36,6 +67,10 @@ def _resolve_jwks_url(settings: Settings) -> str:
 
 
 def _fetch_jwks(settings: Settings) -> dict:
+    local = _resolve_local_jwks(settings)
+    if local is not None:
+        return local
+
     jwks_url = _resolve_jwks_url(settings)
     if not jwks_url:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Cognito JWKS URL is not configured")
@@ -75,9 +110,13 @@ def _claims_auth_context(token: str, settings: Settings) -> AuthContext:
     decode_kwargs = {
         "key": key,
         "algorithms": ["RS256"],
-        "issuer": settings.cognito_issuer or None,
     }
-    options = {"verify_aud": bool(settings.cognito_client_id)}
+    options = {
+        "verify_aud": bool(settings.cognito_client_id),
+        "verify_iss": bool(settings.cognito_issuer),
+    }
+    if settings.cognito_issuer:
+        decode_kwargs["issuer"] = settings.cognito_issuer
     if settings.cognito_client_id:
         decode_kwargs["audience"] = settings.cognito_client_id
 
@@ -97,8 +136,4 @@ def get_current_user(request: Request, settings: Settings = Depends(get_settings
     """Resolve the authenticated user context from bearer token."""
 
     token = _extract_bearer_token(request)
-
-    if settings.env != "production" and token == "fake-token":
-        return _dev_auth_context(request)
-
     return _claims_auth_context(token, settings)

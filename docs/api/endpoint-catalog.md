@@ -1,104 +1,95 @@
-# Endpoint Catalog (MVP)
+# Endpoint Catalog (Hackathon MVP, Agentic V1)
 
 Base prefix: `/api/v1`
 
-## 1. Auth / Profile / Goals
+## 1. Auth
 
-### `GET /auth/cognito/callback`
-- Purpose: map Cognito callback into app bootstrap flow.
-- Auth: public callback route.
-- Response: callback metadata.
+- `GET /auth/cognito/callback`
+- `GET /auth/me`
 
-### `GET /auth/me`
-- Purpose: resolve current authenticated user context.
-- Auth: required.
-- Response: `AuthContext`.
+All protected routes require strict JWT verification.
 
-### `GET /profiles/{user_id}`
-- Purpose: read user profile.
-- Auth: required.
+## 2. Onboarding
 
-### `PUT /profiles/{user_id}`
-- Purpose: create/update user profile.
-- Auth: required.
+- `GET /profiles/{user_id}`
+- `PUT /profiles/{user_id}`
+- `GET /goals/{user_id}`
+- `PUT /goals/{user_id}`
 
-### `GET /goals/{user_id}`
-- Purpose: read user nutrition goals.
-- Auth: required.
+Only self-scope (`{user_id} == token.sub`) is allowed.
 
-### `PUT /goals/{user_id}`
-- Purpose: create/update user goals.
-- Auth: required.
+## 3. Inputs
 
-## 2. Input Ingestion
+- `POST /inputs/fridge-scan`
+- `POST /inputs/meal-scan`
+- `POST /inputs/receipt-scan`
+- `GET /inputs/jobs/{job_id}`
+- `GET /inputs/pantry`
+- `DELETE /inputs/pantry/{item_id}`
+- `GET /inputs/spoilage-alerts`
+- `POST /inputs/chat-message?auto_replan=<bool>`
+- `GET /inputs/chat-messages/latest?limit=<n>`
 
-### `POST /inputs/fridge-scan`
-- Purpose: submit fridge image for ingredient parsing and pantry update.
-- Auth: required.
-- Response: async `JobEnvelope`.
+`auto_replan=true` returns `ChatMessageResponse.recommendation` using `RecommendationBundle`.
 
-### `POST /inputs/meal-scan`
-- Purpose: submit meal image for automatic nutrition logging.
-- Auth: required.
-- Response: async `JobEnvelope`.
+## 4. Planner
 
-### `POST /inputs/receipt-scan`
-- Purpose: submit receipt image for purchased-item extraction.
-- Auth: required.
-- Response: async `JobEnvelope`.
+- `POST /planner/recommendations`
+- `POST /planner/recommendations/{recommendation_id}/replan`
+- `GET /planner/recommendations/latest/{user_id}`
+- `GET /planner/runs/latest/{user_id}`
+- `GET /planner/recommendations/{recommendation_id}/recipe`
+- `GET /planner/recommendations/{recommendation_id}/nutrition`
+- `GET /planner/recommendations/{recommendation_id}/grocery-gap`
 
-### `POST /inputs/chat-message`
-- Purpose: persist user natural-language planning instruction.
-- Auth: required.
-- Response: `ChatMessageResponse`.
+### Replan Behavior
 
-### `GET /inputs/jobs/{job_id}`
-- Purpose: query async ingestion status/result.
-- Auth: required.
-- Response: `JobEnvelope`.
+- Inherits constraints from the original recommendation run snapshot.
+- Merges replan overrides and parsed natural-language constraints.
+- Preserves allergy/restriction continuity across multi-step replans.
 
-## 3. Planning
+## 5. Feedback
 
-### `POST /planner/recommendations`
-- Purpose: execute Railtracks planner flow and create recommendation.
-- Auth: required.
-- Request: `PlanRequest`.
-- Response: `RecommendationBundle`.
+- `PATCH /feedback/recommendations/{recommendation_id}`
 
-### `POST /planner/recommendations/{recommendation_id}/replan`
-- Purpose: manual replan with optional overrides.
-- Auth: required.
-- Request: optional `ReplanRequest`.
-- Response: `RecommendationBundle`.
+`reject` triggers automatic replan and returns `replanned_recommendation_id`.
 
-### `GET /planner/recommendations/latest/{user_id}`
-- Purpose: fetch latest recommendation for user.
-- Auth: required.
-- Response: `RecommendationBundle`.
+## 6. Core Contracts
 
-### `GET /planner/runs/latest/{user_id}`
-- Purpose: fetch latest planner run trace and execution mode (`railtracks` or `fallback`).
-- Auth: required.
-- Response: run metadata (`run_id`, `status`, `mode`, `trace_notes`, `recommendation_id`, timestamps).
+### `PlanRequest`
 
-## 4. Output Views
+- `user_id`
+- `constraints`
+- `inventory` (optional)
+- `latest_meal_log` (optional)
+- `user_message` (optional)
+- `prior_recipe_hint` (optional)
 
-### `GET /planner/recommendations/{recommendation_id}/recipe`
-- Purpose: fetch selected recipe detail and metadata.
-- Auth: required.
+### `RecommendationBundle`
 
-### `GET /planner/recommendations/{recommendation_id}/nutrition`
-- Purpose: fetch nutrition summary.
-- Auth: required.
-
-### `GET /planner/recommendations/{recommendation_id}/grocery-gap`
-- Purpose: fetch minimal missing-ingredient list.
-- Auth: required.
-
-## 5. Feedback Loop
-
-### `PATCH /feedback/recommendations/{recommendation_id}`
-- Purpose: accept/reject recommendation with optional text instruction.
-- Auth: required.
-- Behavior: `reject` triggers automatic Railtracks replanning.
-- Response: `FeedbackResponse` (includes `replanned_recommendation_id` on reject).
+- `recommendation_id`
+- `decision`
+  - `recipe_title`
+  - `rationale`
+  - `confidence`
+- `meal_plan`
+  - `steps`
+  - `nutrition_summary`
+  - `substitutions`
+  - `spoilage_alerts`
+- `grocery_plan`
+  - `missing_ingredients`
+  - `optimized_grocery_list`
+  - `estimated_gap_cost`
+- `execution_plan`
+  - `calendar_blocks`
+  - `cooking_dag_tasks`
+  - `proactive_prep_windows`
+- `reflection`
+  - `status`
+  - `attempts`
+  - `violations`
+  - `adjustments`
+- `memory_updates`
+  - `short_term_updates`
+  - `long_term_metric_deltas`

@@ -2,12 +2,17 @@
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost:8000}"
-TOKEN="${TOKEN:-fake-token}"
+TOKEN="${TOKEN:-}"
 USER_ID="${USER_ID:-demo-user-001}"
 SEED_FILE="${SEED_FILE:-$(dirname "$0")/demo_seed.json}"
 
 if [[ ! -f "$SEED_FILE" ]]; then
   echo "Seed file not found: $SEED_FILE" >&2
+  exit 1
+fi
+
+if [[ -z "$TOKEN" ]]; then
+  echo "TOKEN is required (strict JWT auth enabled)." >&2
   exit 1
 fi
 
@@ -42,13 +47,11 @@ api() {
   if [[ -n "$body" ]]; then
     curl -sS -X "$method" "$BASE_URL$path" \
       -H "Authorization: Bearer $TOKEN" \
-      -H "X-Test-User-Id: $USER_ID" \
       -H "Content-Type: application/json" \
       -d "$body"
   else
     curl -sS -X "$method" "$BASE_URL$path" \
-      -H "Authorization: Bearer $TOKEN" \
-      -H "X-Test-User-Id: $USER_ID"
+      -H "Authorization: Bearer $TOKEN"
   fi
 }
 
@@ -86,7 +89,8 @@ with open(os.environ["SEED_FILE"], "r", encoding="utf-8") as f:
 
 plan = data["plan_request"]
 plan["user_id"] = os.environ["USER_ID"]
-plan["inventory"]["user_id"] = os.environ["USER_ID"]
+if "inventory" in plan and isinstance(plan["inventory"], dict):
+    plan["inventory"]["user_id"] = os.environ["USER_ID"]
 print(json.dumps(plan))
 PY
 )"

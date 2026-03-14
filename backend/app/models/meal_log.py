@@ -1,4 +1,4 @@
-"""Meal logging model from meal scan ingestion."""
+"""Meal log model from meal scan ingestion."""
 
 from __future__ import annotations
 

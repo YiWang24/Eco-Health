@@ -19,12 +19,31 @@ class Settings(BaseSettings):
 
     app_name: str = Field(default="Eco-Health Agentic Dietitian API", alias="APP_NAME")
     api_v1_str: str = Field(default="/api/v1", alias="API_V1_STR")
-    env: Literal["development", "staging", "production"] = Field(default="development", alias="ENV")
+    env: Literal["development", "staging", "production"] = Field(
+        default="development", alias="ENV"
+    )
     debug: bool = Field(default=True, alias="DEBUG")
 
+    # Railtracks settings
+    openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
+    railtracks_enabled: bool = Field(default=False, alias="RAILTRACKS_ENABLED")
+    railtracks_base_url: str = Field(
+        default="https://api.openai.com/v1", alias="RAILTRACKS_BASE_URL"
+    )
+    railtracks_model: str = Field(default="gpt-4o-mini", alias="RAILTRACKS_MODEL")
+    vector_store_mode: Literal["memory", "file"] = Field(
+        default="memory", alias="VECTOR_STORE_MODE"
+    )
+    chroma_persist_dir: str = Field(default="./chroma_db", alias="CHROMA_PERSIST_DIR")
+    chroma_collection_name: str = Field(
+        default="eco_health", alias="CHROMA_COLLECTION_NAME"
+    )
+    vector_snapshot_path: str = Field(
+        default="./data/vector_snapshot.json", alias="VECTOR_SNAPSHOT_PATH"
+    )
+
+    # Vision image parsing key (if used by vision service implementation)
     gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
-    adk_enabled: bool = Field(default=False, alias="ADK_ENABLED")
-    adk_model: str = Field(default="gemini-2.0-flash", alias="ADK_MODEL")
 
     cognito_region: str = Field(default="us-east-1", alias="COGNITO_REGION")
     cognito_user_pool_id: str = Field(default="", alias="COGNITO_USER_POOL_ID")
@@ -33,11 +52,23 @@ class Settings(BaseSettings):
     cognito_issuer: str = Field(default="", alias="COGNITO_ISSUER")
     cognito_user_pool_arn: str = Field(default="", alias="COGNITO_USER_POOL_ARN")
     cognito_jwks_url: str = Field(default="", alias="COGNITO_JWKS_URL")
+    cognito_jwks_json: str = Field(default="", alias="COGNITO_JWKS_JSON")
+    cognito_jwks_path: str = Field(default="", alias="COGNITO_JWKS_PATH")
 
     recipe_api_base_url: str = Field(default="", alias="RECIPE_API_BASE_URL")
     recipe_api_key: str = Field(default="", alias="RECIPE_API_KEY")
 
-    database_url: str = Field(default="", alias="DATABASE_URL")
+    database_url: str = Field(
+        default="",
+        alias="DATABASE_URL",
+    )
+    sqlite_mode: Literal["memory", "file"] = Field(
+        default="memory", alias="SQLITE_MODE"
+    )
+    sqlite_snapshot_path: str = Field(
+        default="./data/eco_health.sqlite3", alias="SQLITE_SNAPSHOT_PATH"
+    )
+    sqlite_auto_snapshot: bool = Field(default=True, alias="SQLITE_AUTO_SNAPSHOT")
     redis_url: str = Field(default="", alias="REDIS_URL")
 
 

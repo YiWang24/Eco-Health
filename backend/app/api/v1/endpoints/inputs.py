@@ -1,23 +1,33 @@
 """Input ingestion endpoints for fridge, meal, receipt, and chat context."""
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.chat_message import ChatMessage
 from app.models.input_job import InputJob
+from app.models.pantry_item import PantryItem
 from app.schemas.auth import AuthContext
 from app.schemas.contracts import (
+    ChatMessageEvent,
     ChatMessageRequest,
     ChatMessageResponse,
+    ConstraintSet,
     FridgeScanRequest,
     JobEnvelope,
     JobStatus,
     MealScanRequest,
+    PantryItemResponse,
+    PlanRequest,
+    RecommendationBundle,
     ReceiptScanRequest,
 )
 from app.services.input_jobs import process_input_job
+from app.services.planner_context import build_effective_plan_request
+from app.services.planner_execution import execute_plan_request
+from app.services.recommendation_mapper import recommendation_to_bundle
 from app.services.user_context import ensure_user
 
 router = APIRouter(prefix="/inputs", tags=["inputs"])
@@ -107,9 +117,79 @@ async def get_job_status(
     return JobEnvelope(job_id=job.id, status=JobStatus(job.status), result=job.result)
 
 
+@router.get("/pantry", response_model=list[PantryItemResponse])
+async def get_pantry(
+    current_user: AuthContext = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[PantryItemResponse]:
+    items = (
+        db.execute(
+            select(PantryItem)
+            .where(PantryItem.user_id == current_user.user_id)
+            .order_by(PantryItem.expires_in_days.asc().nullslast())
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        PantryItemResponse(
+            item_id=item.id,
+            ingredient=item.ingredient,
+            quantity=item.quantity,
+            expires_in_days=item.expires_in_days,
+            source=item.source,
+            updated_at=item.updated_at,
+        )
+        for item in items
+    ]
+
+
+@router.delete("/pantry/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_pantry_item(
+    item_id: int,
+    current_user: AuthContext = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    item = db.get(PantryItem, item_id)
+    if not item or item.user_id != current_user.user_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pantry item not found")
+    db.delete(item)
+    db.commit()
+
+
+@router.get("/spoilage-alerts")
+async def get_spoilage_alerts(
+    current_user: AuthContext = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    items = (
+        db.execute(
+            select(PantryItem)
+            .where(
+                PantryItem.user_id == current_user.user_id,
+                PantryItem.expires_in_days.isnot(None),
+                PantryItem.expires_in_days <= 3,
+            )
+            .order_by(PantryItem.expires_in_days.asc())
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        {
+            "item_id": item.id,
+            "ingredient": item.ingredient,
+            "expires_in_days": item.expires_in_days,
+            "urgency": "critical" if item.expires_in_days <= 1 else "warning",
+        }
+        for item in items
+    ]
+
+
 @router.post("/chat-message", response_model=ChatMessageResponse)
 async def submit_chat_message(
     payload: ChatMessageRequest,
+    auto_replan: bool = Query(default=False),
     current_user: AuthContext = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ChatMessageResponse:
@@ -120,4 +200,50 @@ async def submit_chat_message(
     db.commit()
     db.refresh(event)
 
-    return ChatMessageResponse(event_id=event.id, user_id=event.user_id, message=event.message)
+    recommendation: RecommendationBundle | None = None
+    if auto_replan:
+        base_request = build_effective_plan_request(
+            db,
+            PlanRequest(
+                user_id=current_user.user_id,
+                constraints=ConstraintSet(),
+                user_message=payload.message,
+            ),
+            current_user.user_id,
+        )
+        rec = await execute_plan_request(db=db, request=base_request, trigger="chat_auto_replan")
+        recommendation = recommendation_to_bundle(rec)
+
+    return ChatMessageResponse(
+        event_id=event.id,
+        user_id=event.user_id,
+        message=event.message,
+        recommendation=recommendation,
+    )
+
+
+@router.get("/chat-messages/latest", response_model=list[ChatMessageEvent])
+async def get_latest_chat_messages(
+    limit: int = Query(default=20, ge=1, le=100),
+    current_user: AuthContext = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[ChatMessageEvent]:
+    events = (
+        db.execute(
+            select(ChatMessage)
+            .where(ChatMessage.user_id == current_user.user_id)
+            .order_by(ChatMessage.created_at.desc())
+            .limit(limit)
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        ChatMessageEvent(
+            event_id=event.id,
+            user_id=event.user_id,
+            message=event.message,
+            created_at=event.created_at,
+        )
+        for event in events
+    ]

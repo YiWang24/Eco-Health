@@ -29,7 +29,7 @@ The system outputs actionable meal strategy, not passive tracking.
 
 ## Solution
 
-This repository is a backend-first MVP using FastAPI + Google ADK architecture. The agent combines multimodal perception, user memory, constraint solving, recipe retrieval, and reflection checks to produce grounded recommendations with grocery optimization.
+This repository is a backend-first MVP using FastAPI + Railtracks architecture. The agent combines multimodal perception, user memory, constraint solving, recipe retrieval, and reflection checks to produce grounded recommendations with grocery optimization.
 
 ## User Journey Map
 
@@ -44,7 +44,7 @@ Sign Up -> Set Goals -> Scan Fridge / Scan Meal / Scan Grocery Receipt / Send Ch
 
 ## Core Features (MVP vs Next)
 
-> **MVP boundary for hackathon:** exactly these 6 core features are in-scope. Dashboard and calendar automation are explicitly post-MVP.
+> **MVP boundary for hackathon:** core planning, execution support, and memory feedback loop are in-scope.
 
 ### MVP (In Scope)
 
@@ -54,12 +54,14 @@ Sign Up -> Set Goals -> Scan Fridge / Scan Meal / Scan Grocery Receipt / Send Ch
 4. Agentic nutrition planner (multi-constraint meal decision).
 5. Recipe retrieval via RAG-style pipeline (external recipe API in MVP).
 6. Smart grocery optimization (minimal missing-ingredient list).
+7. Local execution planning (calendar block + cooking DAG + proactive prep windows).
+8. Long-term memory metric updates (money saved, waste reduction, sustainability impact, preference memory).
 
 ### Next (Post-MVP)
 
 - Health and sustainability impact dashboard.
-- Context-aware cooking scheduler (calendar sync).
-- Deeper proactive prep DAG scheduling.
+- External calendar provider integrations.
+- More advanced proactive scheduling optimization policies.
 
 ## Agentic Design (Plan/Tools/Memory/Reflection/RAG Loop)
 
@@ -70,8 +72,9 @@ The orchestrator follows a ReAct-style loop:
 1. **Perceive** multimodal user inputs.
 2. **Prioritize** expiring items and hard constraints.
 3. **Retrieve** profile/history and recipe candidates.
-4. **Act** by producing recommendation bundle.
+4. **Query Recipe** and formulate recommendation draft.
 5. **Reflect** to validate constraints before final response.
+6. **Finalize Execution Plan** (calendar + DAG + prep windows).
 
 ### Tools (Function Calling)
 
@@ -83,11 +86,14 @@ MVP tool contracts:
 - `retrieve_recipe_candidates`
 - `calculate_meal_macros`
 - `generate_grocery_gap`
+- `decompose_cooking_workflow`
+- `schedule_proactive_prep`
+- `sync_to_calendar` (local persistence)
 
 ### Memory
 
 - **Short-term state**: current session context and in-progress plan adjustments.
-- **Long-term state**: persistent profile, goals, meal history, and purchase patterns.
+- **Long-term state**: persistent profile/goals/history plus favorite recipes, purchase patterns, money-saved metrics, food-waste metrics, and sustainability metrics.
 
 ### Reflection
 
@@ -108,10 +114,11 @@ The planner decides **what** to eat, and retrieval provides **how** to make it w
 
 - **Languages**: Python (backend), Markdown (design/docs), JavaScript/TypeScript planned for frontend
 - **Backend**: FastAPI
-- **Agent framework**: Google ADK orchestrator with safe fallback execution
-- **Model provider**: Gemini
+- **Agent framework**: Railtracks orchestrator
+- **Model provider**: OpenAI-compatible API
 - **Auth**: AWS Cognito
-- **Database**: PostgreSQL + pgvector
+- **Database**: SQLite memory-first + file snapshot storage
+- **Vector Store**: Chroma memory-first + local snapshot/file modes
 - **Async processing**: FastAPI `BackgroundTasks` (MVP)
 - **Cache/queue (optional)**: Redis (reserved)
 - **Recipe source**: External recipe API (MVP)
@@ -133,10 +140,10 @@ uv run uvicorn app.main:app --reload --port 8000
 ```
 
 Notes:
-- For real Gemini Vision parsing, set `GEMINI_API_KEY` in `backend/.env`.
+- For planner and vision parsing, set `OPENAI_API_KEY` in `backend/.env`.
 - Input image URLs must be reachable by the backend service.
-- Real E2E flow (with Nano Banana image generation):
-  `cd backend && RUN_REAL_E2E_AGENTIC=1 GEMINI_API_KEY=... NANO_BANANA_MODEL=gemini-2.5-flash-image uv run pytest -q tests/test_e2e_agentic_full_flow.py -s`
+- Local deterministic test suite:
+  `cd backend && uv run pytest -q`
 
 Frontend:
 
@@ -165,7 +172,6 @@ Frontend:
 ## Future Work
 
 - Unified impact dashboard (health + climate ROI).
-- Calendar-aware cooking scheduler.
-- Advanced prep-task decomposition and proactive scheduling.
+- External calendar integrations and bi-directional sync.
+- Advanced prep-task optimization from real availability signals.
 - Better retrieval quality with hybrid local + external recipe retrieval.
-- Production-grade observability and policy controls.

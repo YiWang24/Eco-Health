@@ -13,21 +13,43 @@ from app.schemas.contracts import ConstraintSet, PlanRequest, RecommendationBund
 from app.services.constraint_parser import merge_constraints
 from app.services.planner_execution import execute_plan_request
 from app.services.planner_context import build_effective_plan_request
+from app.services.recommendation_mapper import recommendation_to_bundle
 from app.services.user_context import ensure_user
 
 router = APIRouter(prefix="/planner", tags=["planner"])
 
 
 def _to_bundle(rec: Recommendation) -> RecommendationBundle:
-    return RecommendationBundle(
-        recommendation_id=rec.id,
-        recipe_title=rec.recipe_title,
-        steps=rec.steps or [],
-        nutrition_summary=rec.nutrition_summary,
-        substitutions=rec.substitutions or [],
-        spoilage_alerts=rec.spoilage_alerts or [],
-        grocery_gap=rec.grocery_gap or [],
+    return recommendation_to_bundle(rec)
+
+
+def _load_constraints_from_recommendation_run(
+    db: Session,
+    recommendation_id: str,
+) -> ConstraintSet | None:
+    """Load effective constraints from the original recommendation run payload."""
+
+    run = (
+        db.execute(
+            select(PlanRun)
+            .where(PlanRun.recommendation_id == recommendation_id)
+            .order_by(PlanRun.created_at.desc())
+        )
+        .scalars()
+        .first()
     )
+    if not run:
+        return None
+
+    payload = run.request_payload or {}
+    constraints_payload = payload.get("constraints")
+    if not isinstance(constraints_payload, dict):
+        return None
+
+    try:
+        return ConstraintSet.model_validate(constraints_payload)
+    except Exception:
+        return None
 
 
 @router.post("/recommendations", response_model=RecommendationBundle)
@@ -41,7 +63,7 @@ async def create_recommendation(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden user scope")
 
     effective_request = build_effective_plan_request(db, request, current_user.user_id)
-    rec = execute_plan_request(db=db, request=effective_request, trigger="create_recommendation")
+    rec = await execute_plan_request(db=db, request=effective_request, trigger="create_recommendation")
     return _to_bundle(rec)
 
 
@@ -58,12 +80,17 @@ async def replan_recommendation(
     if original.user_id != current_user.user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden recommendation scope")
 
+    prior_message = f"[Prior recipe: {original.recipe_title}] " + (
+        (payload.user_message or "") if payload else ""
+    )
+    inherited_constraints = _load_constraints_from_recommendation_run(db, recommendation_id) or ConstraintSet()
+
     base_request = build_effective_plan_request(
         db,
         PlanRequest(
             user_id=current_user.user_id,
-            constraints=ConstraintSet(),
-            user_message=(payload.user_message if payload else None),
+            constraints=inherited_constraints,
+            user_message=prior_message or None,
         ),
         current_user.user_id,
     )
@@ -77,9 +104,14 @@ async def replan_recommendation(
         constraints=constraints,
         inventory=base_request.inventory,
         latest_meal_log=base_request.latest_meal_log,
-        user_message=(payload.user_message if payload and payload.user_message else base_request.user_message),
+        user_message=prior_message or base_request.user_message,
+        prior_recipe_hint=original.recipe_metadata or None,
     )
-    replanned = execute_plan_request(db=db, request=effective_request, trigger=f"manual_replan:{recommendation_id}")
+    replanned = await execute_plan_request(
+        db=db,
+        request=effective_request,
+        trigger=f"manual_replan:{recommendation_id}",
+    )
     return _to_bundle(replanned)
 
 
@@ -139,10 +171,11 @@ async def get_recipe_detail(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recommendation not found")
     if rec.user_id != current_user.user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden recommendation scope")
+    bundle = recommendation_to_bundle(rec)
     return {
         "recommendation_id": rec.id,
-        "recipe_title": rec.recipe_title,
-        "steps": rec.steps,
+        "recipe_title": bundle.decision.recipe_title,
+        "steps": bundle.meal_plan.steps,
         "recipe_metadata": rec.recipe_metadata or {},
     }
 
@@ -158,7 +191,8 @@ async def get_nutrition_summary(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recommendation not found")
     if rec.user_id != current_user.user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden recommendation scope")
-    return rec.nutrition_summary
+    bundle = recommendation_to_bundle(rec)
+    return bundle.meal_plan.nutrition_summary.model_dump()
 
 
 @router.get("/recommendations/{recommendation_id}/grocery-gap")
@@ -172,4 +206,5 @@ async def get_grocery_gap(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recommendation not found")
     if rec.user_id != current_user.user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden recommendation scope")
-    return rec.grocery_gap or []
+    bundle = recommendation_to_bundle(rec)
+    return [item.model_dump() for item in bundle.grocery_plan.missing_ingredients]

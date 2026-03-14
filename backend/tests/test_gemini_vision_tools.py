@@ -1,4 +1,6 @@
-"""Tests for Gemini vision tool integration and fallback behavior."""
+"""Tests for vision tool integration behavior."""
+
+import pytest
 
 from app.agents import tools
 
@@ -25,15 +27,13 @@ def test_analyze_fridge_vision_uses_gemini_when_no_detected_items(monkeypatch) -
     assert result["ingredients"][0]["ingredient"] == "spinach"
 
 
-def test_parse_receipt_items_falls_back_when_gemini_fails(monkeypatch) -> None:
+def test_parse_receipt_items_raises_when_vision_fails(monkeypatch) -> None:
     def _raise(_: str):
         raise RuntimeError("vision provider error")
 
     monkeypatch.setattr(tools, "parse_receipt_with_gemini", _raise)
-    result = tools.parse_receipt_items("https://example.com/receipt.jpg")
-
-    assert result["items"]
-    assert result["items"][0]["ingredient"] in {"tomato", "onion"}
+    with pytest.raises(RuntimeError, match="vision provider error"):
+        tools.parse_receipt_items("https://example.com/receipt.jpg")
 
 
 def test_analyze_meal_vision_uses_gemini_when_no_manual_macros(monkeypatch) -> None:

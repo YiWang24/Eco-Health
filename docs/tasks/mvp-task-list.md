@@ -1,117 +1,202 @@
-# MVP Task List (Business Features Only)
+# MVP Task List (Hackathon Deliverables)
 
-This checklist is scoped for hackathon business delivery. Non-functional items are intentionally excluded.
+This checklist is scoped to the current hackathon deliverables and focuses on user-facing business functionality only.
 
-## Phase 1 - Onboarding and Goal Setup
+## Deliverable 1 - User Setup and Personalization
 
-### Task 1.1: User sign-in bootstrap
+### Task 1.1: Auth bootstrap
 - Owner: `Backend`
 - Estimate: `0.5 day`
 - Dependencies: none
-- Done criteria: authenticated user identity is available in protected API routes.
+- Done criteria: protected APIs can resolve the current authenticated user.
 
-### Task 1.2: Profile create/update/read
+### Task 1.2: Profile onboarding
 - Owner: `Backend`
 - Estimate: `0.5 day`
 - Dependencies: Task 1.1
-- Done criteria: profile API supports full onboarding data roundtrip.
+- Done criteria: user can create, update, and read profile fields including body metrics, activity level, dietary preferences, allergies, and cook-time preference.
 
-### Task 1.3: Goal create/update/read
+### Task 1.3: Goal setup
 - Owner: `Backend`
 - Estimate: `0.5 day`
 - Dependencies: Task 1.1
-- Done criteria: nutrition + restriction + budget/time goals persist and load correctly.
+- Done criteria: calorie target, macro targets, dietary restrictions, allergies, budget limit, and max cook time can be created, updated, and fetched.
 
-## Phase 2 - Multimodal Food Context Ingestion
+## Deliverable 2 - Multimodal Context Ingestion
 
-### Task 2.1: Receipt ingestion pipeline
+### Task 2.1: Fridge scan ingestion
 - Owner: `Backend`
 - Estimate: `0.75 day`
-- Dependencies: Phase 1
-- Done criteria: receipt scan updates pantry inventory via async job.
+- Dependencies: Deliverable 1
+- Done criteria: fridge image submission creates an async job and updates pantry items with ingredient, quantity, expiry, and source.
 
-### Task 2.2: Fridge ingestion pipeline
+### Task 2.2: Receipt scan ingestion
 - Owner: `Backend`
 - Estimate: `0.75 day`
-- Dependencies: Phase 1
-- Done criteria: fridge scan extracts ingredients and spoilage hints into pantry state.
+- Dependencies: Deliverable 1
+- Done criteria: receipt image submission creates an async job, stores parsed receipt data, and merges purchased items into pantry state.
 
-### Task 2.3: Meal ingestion pipeline
+### Task 2.3: Meal scan ingestion
 - Owner: `Backend`
 - Estimate: `0.75 day`
-- Dependencies: Phase 1
-- Done criteria: meal scan writes meal log with macro estimates.
+- Dependencies: Deliverable 1
+- Done criteria: meal image submission creates an async job and writes a meal log with estimated nutrition.
 
-### Task 2.4: Chat message context endpoint
+### Task 2.4: Pantry view and cleanup
+- Owner: `Backend`
+- Estimate: `0.5 day`
+- Dependencies: Tasks 2.1, 2.2
+- Done criteria: user can list pantry items and delete an item that is no longer available.
+
+### Task 2.5: Spoilage alert surface
 - Owner: `Backend`
 - Estimate: `0.25 day`
-- Dependencies: Phase 1
-- Done criteria: user messages are persisted and retrievable for planning context.
+- Dependencies: Tasks 2.1, 2.2
+- Done criteria: user can fetch pantry items that are close to expiry with urgency labels.
 
-## Phase 3 - Railtracks Planner Core
+### Task 2.6: Chat context capture
+- Owner: `Backend`
+- Estimate: `0.25 day`
+- Dependencies: Deliverable 1
+- Done criteria: user can submit a planning message that is persisted as latest planning intent.
 
-### Task 3.1: Effective context builder
+### Task 2.7: Chat-triggered auto replan
 - Owner: `Backend`
 - Estimate: `0.5 day`
-- Dependencies: Phase 2
-- Done criteria: planner request auto-merges goals/pantry/meal/chat context when omitted.
+- Dependencies: Task 2.6, Deliverable 3
+- Done criteria: chat message endpoint can optionally trigger immediate recommendation generation using persisted context.
+
+## Deliverable 3 - Core Planner Experience
+
+### Task 3.1: Effective planning context builder
+- Owner: `Backend`
+- Estimate: `0.5 day`
+- Dependencies: Deliverable 2
+- Done criteria: planner request can auto-fill missing constraints, pantry, latest meal, and latest chat message from persisted user context.
 
 ### Task 3.2: Recipe candidate retrieval
 - Owner: `Backend`
 - Estimate: `0.75 day`
 - Dependencies: Task 3.1
-- Done criteria: TheMealDB candidates are fetched and normalized into internal recipe format.
+- Done criteria: recipe candidates are fetched and normalized into the internal planning format.
 
-### Task 3.3: Candidate scoring + selection
+### Task 3.3: Candidate scoring and selection
 - Owner: `Backend`
 - Estimate: `0.75 day`
 - Dependencies: Task 3.2
-- Done criteria: ranking considers goals, restrictions, allergies, spoilage, and grocery gap size.
+- Done criteria: ranking considers dietary restrictions, allergies, calorie direction, cook time, spoilage priority, and grocery gap size.
 
-### Task 3.4: Recommendation output assembly
+### Task 3.4: Recommendation bundle assembly
 - Owner: `Backend`
 - Estimate: `0.5 day`
 - Dependencies: Task 3.3
-- Done criteria: `RecommendationBundle` returns recipe steps, nutrition, substitutions, alerts, and grocery gap.
+- Done criteria: planner returns `RecommendationBundle` with recipe title, steps, nutrition summary, substitutions, spoilage alerts, and grocery gap.
 
-## Phase 4 - Feedback Replan Loop
+### Task 3.5: Recommendation detail surfaces
+- Owner: `Backend`
+- Estimate: `0.5 day`
+- Dependencies: Task 3.4
+- Done criteria: user can separately fetch recipe detail, nutrition summary, grocery gap, and latest recommendation.
 
-### Task 4.1: Feedback persistence
+### Task 3.6: Planner run visibility
 - Owner: `Backend`
 - Estimate: `0.25 day`
-- Dependencies: Phase 3
-- Done criteria: accept/reject feedback stored with recommendation link.
+- Dependencies: Task 3.4
+- Done criteria: latest planning run can be fetched with run status, execution mode, recommendation id, and trace notes.
 
-### Task 4.2: Reject -> replan workflow
-- Owner: `Backend`
-- Estimate: `0.75 day`
-- Dependencies: Task 4.1
-- Done criteria: reject feedback triggers a new planner run and returns a new recommendation id.
+## Deliverable 4 - Constraint Safety and Reflection
 
-### Task 4.3: Feedback text constraint parsing
+### Task 4.1: Allergy conflict handling
 - Owner: `Backend`
 - Estimate: `0.5 day`
-- Dependencies: Task 4.2
-- Done criteria: text instructions (e.g. low calorie, vegetarian, 15 mins) are converted to structured overrides.
+- Dependencies: Deliverable 3
+- Done criteria: allergen ingredients are excluded from grocery gap and unsafe suggestions are removed from final output.
 
-## Phase 5 - Demo-Ready End-to-End Flow
-
-### Task 5.1: One-shot scripted API flow
+### Task 4.2: Dietary restriction enforcement
 - Owner: `Backend`
 - Estimate: `0.5 day`
-- Dependencies: Phases 1-4
-- Done criteria: scripted run demonstrates onboarding -> scans -> planner -> feedback replan.
+- Dependencies: Deliverable 3
+- Done criteria: vegetarian and similar restriction conflicts trigger substitutions or compliant alternatives.
 
-### Task 5.2: Real E2E test with generated images
+### Task 4.3: Calorie and macro adjustment guidance
+- Owner: `Backend`
+- Estimate: `0.5 day`
+- Dependencies: Deliverable 3
+- Done criteria: overly heavy recommendations include lighter substitutions or adjustment guidance.
+
+### Task 4.4: Spoilage-priority reminders
+- Owner: `Backend`
+- Estimate: `0.25 day`
+- Dependencies: Deliverable 2, Deliverable 3
+- Done criteria: expiring ingredients generate spoilage alerts in the recommendation response.
+
+## Deliverable 5 - Feedback and Replanning Loop
+
+### Task 5.1: Feedback persistence
+- Owner: `Backend`
+- Estimate: `0.25 day`
+- Dependencies: Deliverable 3
+- Done criteria: accept/reject feedback is stored with the associated recommendation.
+
+### Task 5.2: Reject triggers automatic replan
 - Owner: `Backend`
 - Estimate: `0.75 day`
 - Dependencies: Task 5.1
-- Done criteria: optional real E2E test executes full flow using generated receipt/fridge/meal images.
+- Done criteria: rejecting a recommendation creates a new recommendation with a new id.
 
-## Business Acceptance Scenarios
+### Task 5.3: Manual replan endpoint
+- Owner: `Backend`
+- Estimate: `0.5 day`
+- Dependencies: Deliverable 3
+- Done criteria: user can request a replan from an existing recommendation with optional override payload.
 
-1. User can complete onboarding and set goals.
-2. User can submit receipt/fridge/meal scans and get planner-ready context.
-3. Planner returns actionable recommendation bundle.
-4. User can send chat constraints and get updated recommendations.
-5. Reject feedback triggers automatic replanning with new recommendation output.
+### Task 5.4: Feedback text parsing into structured constraints
+- Owner: `Backend`
+- Estimate: `0.5 day`
+- Dependencies: Task 5.2
+- Done criteria: free-text instructions such as "under 450 calories", "vegetarian", "15 minutes", and budget hints are converted into planner constraints.
+
+### Task 5.5: Prior recommendation continuity
+- Owner: `Backend`
+- Estimate: `0.25 day`
+- Dependencies: Task 5.3
+- Done criteria: replanning carries forward prior recommendation context so the next result is meaningfully different but still relevant.
+
+## Deliverable 6 - Demo-Ready End-to-End Experience
+
+### Task 6.1: Happy-path API walkthrough
+- Owner: `Backend`
+- Estimate: `0.5 day`
+- Dependencies: Deliverables 1-5
+- Done criteria: end-to-end flow works in this order: auth bootstrap -> profile/goals -> scans/chat -> planner -> feedback -> replan.
+
+### Task 6.2: Input-combination scenarios
+- Owner: `Backend`
+- Estimate: `0.5 day`
+- Dependencies: Deliverables 2-5
+- Done criteria: system behaves correctly for fridge-only, meal-only, receipt-only, and combined scan scenarios.
+
+### Task 6.3: Constraint scenario coverage
+- Owner: `Backend`
+- Estimate: `0.5 day`
+- Dependencies: Deliverables 3-5
+- Done criteria: demo coverage includes allergen blocking, calorie overflow guidance, vegetarian conflict handling, and spoilage-priority behavior.
+
+### Task 6.4: Replan cascade demo
+- Owner: `Backend`
+- Estimate: `0.25 day`
+- Dependencies: Deliverable 5
+- Done criteria: one recommendation can be replanned multiple times, producing distinct recommendation ids across the chain.
+
+## Business Acceptance Checklist
+
+1. User can sign in and complete profile + goal setup.
+2. User can submit fridge, receipt, meal, and chat inputs.
+3. Pantry state updates from ingestion and can be reviewed.
+4. Planner can generate a recommendation even when parts of context are omitted from the request.
+5. Recommendation output is actionable and includes recipe steps, nutrition, substitutions, spoilage alerts, and grocery gap.
+6. User can inspect latest recommendation and related output surfaces.
+7. User can accept or reject a recommendation.
+8. Reject feedback or manual replan generates a new recommendation.
+9. Free-text feedback can refine future recommendations through parsed constraints.
+10. The full hackathon demo flow can be shown end to end with stable business behavior.

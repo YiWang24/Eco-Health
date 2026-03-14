@@ -101,35 +101,6 @@ def _parse_meal_detail(meal: dict[str, Any]) -> dict[str, Any]:
     return parsed
 
 
-def _fallback_recipe(inventory: InventorySnapshot | None) -> dict[str, Any]:
-    first = inventory.items[0].ingredient if inventory and inventory.items else "vegetables"
-    inventory_items = inventory.items if inventory and inventory.items else []
-    details = [{"ingredient": item.ingredient.lower(), "measure": item.quantity} for item in inventory_items]
-    if not details:
-        details = [{"ingredient": first.lower(), "measure": None}]
-
-    return {
-        "recipe_id": "fallback-local",
-        "recipe_title": f"Quick {first.title()} Bowl",
-        "category": "Quick Meal",
-        "area": "Universal",
-        "instructions": "Prepare ingredients, stir-fry quickly, and serve.",
-        "steps": [
-            f"Prepare {first} and remaining available ingredients",
-            "Stir-fry with light seasoning for 8-10 minutes",
-            "Serve immediately",
-        ],
-        "ingredients": [item["ingredient"] for item in details],
-        "ingredient_details": details,
-        "tags": ["fallback", "quick"],
-        "thumbnail_url": None,
-        "youtube_url": None,
-        "source_url": None,
-        "api_source": "fallback",
-        "substitutions": ["Use tofu or beans for extra protein"],
-    }
-
-
 def _request_json(endpoint: str, params: dict[str, Any]) -> dict[str, Any] | None:
     if not settings.recipe_api_base_url:
         return None
@@ -305,12 +276,12 @@ def retrieve_recipe_candidate(
     inventory: InventorySnapshot | None,
     constraints: ConstraintSet | None = None,
 ) -> dict[str, Any]:
-    """Retrieve one recipe candidate with robust fallback."""
+    """Retrieve one recipe candidate."""
 
     candidates = retrieve_recipe_candidates(inventory, constraints=constraints, limit=1)
     if candidates:
         return candidates[0]
-    return _fallback_recipe(inventory)
+    raise RuntimeError("No recipe candidates available from recipe provider")
 
 
 def calculate_nutrition(recipe: dict[str, Any], inventory: InventorySnapshot | None) -> NutritionSummary:

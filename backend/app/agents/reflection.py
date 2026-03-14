@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from app.schemas.contracts import PlanRequest, RecommendationBundle
+from app.agents.schemas import AgentDraftBundle
+from app.schemas.contracts import PlanRequest
 
 _ANIMAL_KEYWORDS = {
     "chicken",
@@ -23,10 +24,11 @@ def _contains_animal_terms(text: str) -> bool:
     return any(keyword in lowered for keyword in _ANIMAL_KEYWORDS)
 
 
-def apply_reflection(bundle: RecommendationBundle, request: PlanRequest) -> tuple[RecommendationBundle, list[str]]:
+def apply_reflection(bundle: AgentDraftBundle, request: PlanRequest) -> tuple[AgentDraftBundle, list[str], list[dict]]:
     """Enforce hard constraints and return reflection notes."""
 
     notes: list[str] = []
+    violations: list[dict] = []
 
     # Hard guard: remove allergen ingredients from grocery gap if known.
     allergies = {a.lower() for a in request.constraints.allergies}
@@ -38,9 +40,11 @@ def apply_reflection(bundle: RecommendationBundle, request: PlanRequest) -> tupl
             ingredient = item.ingredient.lower()
             if ingredient in allergies:
                 notes.append(f"Removed allergen ingredient from grocery gap: {ingredient}")
+                violations.append({"type": "allergen_block", "ingredient": ingredient, "action": "removed_from_gap"})
                 continue
             if vegetarian_like and _contains_animal_terms(ingredient):
                 notes.append(f"Removed non-{','.join(sorted({'vegetarian','vegan'} & restrictions))} ingredient: {ingredient}")
+                violations.append({"type": "diet_restriction_conflict", "restriction": ",".join(sorted({"vegetarian","vegan"} & restrictions)), "action": "substitution_added"})
                 continue
             filtered_gap.append(item)
         bundle.grocery_gap = filtered_gap
@@ -48,6 +52,7 @@ def apply_reflection(bundle: RecommendationBundle, request: PlanRequest) -> tupl
     calories_target = request.constraints.calories_target
     if calories_target is not None and bundle.nutrition_summary.calories > calories_target:
         notes.append("Calorie target exceeded; adjusted output with lower-calorie guidance")
+        violations.append({"type": "calorie_overflow", "actual": bundle.nutrition_summary.calories, "target": calories_target, "action": "substitution_added"})
         bundle.substitutions.append("Use a smaller portion or lower-calorie protein swap")
     protein_target = request.constraints.protein_g_target
     if protein_target is not None and bundle.nutrition_summary.protein_g < protein_target:
@@ -66,6 +71,7 @@ def apply_reflection(bundle: RecommendationBundle, request: PlanRequest) -> tupl
 
     if vegetarian_like and _contains_animal_terms(bundle.recipe_title):
         notes.append("Recipe title conflicts with vegetarian/vegan restriction; added swap guidance")
+        violations.append({"type": "diet_restriction_conflict", "restriction": ",".join(sorted({"vegetarian","vegan"} & restrictions)), "action": "substitution_added"})
         bundle.substitutions.append("Swap animal protein for tofu, lentils, or tempeh")
 
     expiring_items = []
@@ -89,4 +95,4 @@ def apply_reflection(bundle: RecommendationBundle, request: PlanRequest) -> tupl
     if not notes:
         notes.append("Reflection checks passed")
 
-    return bundle, notes
+    return bundle, notes, violations

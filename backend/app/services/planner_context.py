@@ -107,4 +107,5 @@ def build_effective_plan_request(db: Session, request: PlanRequest, user_id: str
         inventory=inventory,
         latest_meal_log=latest_meal,
         user_message=user_message,
+        prior_recipe_hint=request.prior_recipe_hint,
     )

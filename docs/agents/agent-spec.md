@@ -1,127 +1,141 @@
-# Agent Specification (MVP, Railtracks)
+# Agent Specification (Hackathon MVP, Agentic V1)
 
-> Implementation status: planner orchestration is migrated to Railtracks workflow execution.
+## 1. Product Goal
 
-## 1. Goal
+Build a multimodal dietary planning agent that produces an executable next-meal decision from:
 
-Deliver a business-first agent that turns user food context into practical meal decisions:
+- onboarding constraints
+- pantry and intake context
+- free-form user intent
 
-- hit nutrition targets
-- prioritize expiring ingredients
-- reduce grocery waste and unnecessary purchases
+The agent must optimize for nutrition goals, spoilage reduction, grocery efficiency, and usability.
 
-## 2. Railtracks Workflow Graph
+## 2. Scope
 
-```mermaid
-flowchart LR
-  U["User Inputs"] --> P["Perceive Node"]
-  P --> R["Reason Node"]
-  R --> T["Retrieve Node"]
-  T --> A["Act Node"]
-  A --> F["Reflect Node"]
-  F --> O["RecommendationBundle"]
-```
+### In Scope
 
-### Node Responsibilities
+1. Profile/goals onboarding and strict JWT-authenticated access.
+2. Fridge/meal/receipt/chat ingestion with persisted context.
+3. Stage-based Railtracks planner flow:
+   - Perceive
+   - Prioritize
+   - Retrieve
+   - Query Recipe
+   - Formulate
+   - Reflect (retry up to 3 attempts)
+   - Finalize Execution Plan
+4. Feedback-driven replanning with constraint inheritance from original run snapshot.
+5. Local execution tools:
+   - calendar block persistence
+   - cooking DAG task decomposition
+   - proactive prep window scheduling
+6. Long-term memory aggregates:
+   - favorite recipes
+   - purchase patterns
+   - cumulative money saved
+   - food-waste reduction metrics
+   - sustainability impact metrics
 
-- **Perceive**: collect profile/goals/pantry/intake/chat + latest scan signals.
-- **Reason**: resolve constraints and prioritize spoilage-sensitive ingredients.
-- **Retrieve**: fetch recipe candidates and metadata from TheMealDB adapter.
-- **Act**: construct recommendation, nutrition estimate, and grocery gap.
-- **Reflect**: enforce hard business constraints and patch unsafe outputs.
+### Out of Scope
 
-## 3. Tool Contracts (MVP)
+- analytics dashboard UX
+- production observability/traffic strategy
+- external calendar providers (Google/Apple/MCP) in this round
 
-### 3.1 `analyze_fridge_vision(image_payload)`
+## 3. Core Workflow
 
-Input:
-- fridge image reference
-- optional pre-detected items
+### 3.1 Perceive
 
-Output:
-- normalized ingredient list (`ingredient`, `quantity`, `expires_in_days`)
+Build one effective `PlanRequest` from request payload + persisted context:
 
-### 3.2 `analyze_meal_vision(image_payload)`
+- goals fallback
+- pantry fallback
+- latest meal fallback
+- latest chat fallback
 
-Input:
-- meal image reference
+### 3.2 Prioritize
 
-Output:
-- meal label + estimated macros (`calories`, `protein_g`, `carbs_g`, `fat_g`)
+Extract planning priorities:
 
-### 3.3 `parse_receipt_items(image_payload)`
+- expiring ingredients
+- allergies/restrictions
+- time/budget boundaries
 
-Input:
-- grocery receipt image reference
+### 3.3 Retrieve + Query Recipe
 
-Output:
-- normalized purchased items list for pantry merge
+Use RAG context + recipe provider candidates (TheMealDB) to produce ranked recipe options.
 
-### 3.4 `retrieve_recipe_candidates(query_constraints)`
+### 3.4 Formulate
 
-Input:
-- ingredient priority
-- dietary/allergy rules
-- calorie/macro/cook-time/budget targets
+Railtracks LLM generates a structured recommendation draft.
 
-Output:
-- ranked candidates with parsed recipe metadata
+### 3.5 Reflect
 
-### 3.5 `calculate_meal_macros(recipe_ingredients)`
+Apply hard checks and adjustment guidance:
 
-Output:
-- nutrition estimate used for scoring and response rendering
+- allergen/diet safety
+- macro and calorie guidance
+- spoilage reminders
 
-### 3.6 `generate_grocery_gap(recipe_ingredients, current_inventory)`
+If violated, retry with alternate candidate (max 3 attempts total).
 
-Output:
-- minimal missing ingredients list with reason strings
+### 3.6 Finalize Execution Plan
 
-## 4. Memory Policy
+Generate executable artifacts:
 
-### 4.1 Short-Term Runtime State
+- calendar blocks
+- DAG cooking tasks
+- proactive prep windows
 
-- current workflow inputs
-- candidate ranking context
-- interim substitution decisions
+Persist artifacts locally.
 
-### 4.2 Long-Term Persisted Memory
+## 4. Tool Contracts
 
-- profile/goals
-- pantry and receipt history
-- meal history
-- recommendation and feedback history
+### Perception/Planning Tools
 
-## 5. Reflection Policy (Business Hard Checks)
+- `analyze_fridge_vision`
+- `analyze_meal_vision`
+- `parse_receipt_items`
+- `retrieve_recipe_candidates`
+- `calculate_meal_macros`
+- `generate_grocery_gap_tool`
 
-1. remove allergen conflicts from output
-2. remove non-compliant ingredients for vegetarian/vegan constraints
-3. enforce calorie/macro direction via substitution guidance
-4. enforce spoilage-priority reminders
-5. enforce grocery-gap consistency with selected recipe
+### Execution Tools
 
-If a perfect candidate is unavailable, return best feasible plan plus explicit adjustment hints.
+- `decompose_cooking_workflow`
+- `schedule_proactive_prep`
+- `sync_to_calendar`
 
-## 6. Feedback-Driven Replanning Policy
+All execution tools are local-first and persist to SQLite.
 
-- `reject` feedback text is parsed into structured overrides (calorie/time/restriction/allergy hints).
-- Parsed overrides merge with stored goals.
-- Same Railtracks workflow reruns with updated constraints.
-- New recommendation is persisted and linked through `plan_runs` + `feedback_events`.
+## 5. Memory Model
 
-## 7. Output Contract
+### Short-Term
 
-Primary output is `RecommendationBundle`:
+- effective request context
+- run trace and reflection notes
+- prior recipe hint for replan continuity
 
-- `recipe_title`
-- `steps`
-- `nutrition_summary`
-- `substitutions`
-- `spoilage_alerts`
-- `grocery_gap`
+### Long-Term
 
-Secondary output for trace/debug:
+Stored in `user_memory_profiles`:
 
-- `plan_runs.status`
-- `plan_runs.mode` (`railtracks` or `fallback`)
-- `plan_runs.trace_notes`
+- `favorite_recipes`
+- `purchase_patterns`
+- `cumulative_money_saved`
+- `food_waste_reduction_metrics`
+- `sustainability_impact_metrics`
+
+## 6. Public Contract (V1)
+
+Planner endpoints keep existing paths (`/api/v1/planner/*`) and return `RecommendationBundle`.
+
+Fields:
+
+- `recommendation_id`
+- `decision` (`recipe_title`, `rationale`, `confidence`)
+- `meal_plan` (`steps`, `nutrition_summary`, `substitutions`, `spoilage_alerts`)
+- `grocery_plan` (`missing_ingredients`, `optimized_grocery_list`, `estimated_gap_cost`)
+- `execution_plan` (`calendar_blocks`, `cooking_dag_tasks`, `proactive_prep_windows`)
+- `reflection` (`status`, `attempts`, `violations`, `adjustments`)
+- `memory_updates` (`short_term_updates`, `long_term_metric_deltas`)

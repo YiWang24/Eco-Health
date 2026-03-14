@@ -12,6 +12,7 @@ from app.schemas.contracts import ConstraintSet, FeedbackPatch, FeedbackResponse
 from app.services.constraint_parser import derive_constraints_from_message
 from app.services.planner_context import build_effective_plan_request
 from app.services.planner_execution import execute_plan_request
+from app.services.user_memory import register_feedback_memory_signal
 
 router = APIRouter(prefix="/feedback", tags=["feedback"])
 
@@ -38,6 +39,16 @@ async def patch_recommendation_feedback(
     db.add(event)
     db.flush()
 
+    feedback_delta = register_feedback_memory_signal(
+        db=db,
+        user_id=current_user.user_id,
+        recipe_title=rec.recipe_title,
+        action=payload.action,
+    )
+    if feedback_delta.get("favorite_recipe_delta"):
+        event.message = (payload.message or "") + f" | memory_delta={feedback_delta['favorite_recipe_delta']}"
+        db.add(event)
+
     replanned_id: str | None = None
     if payload.action == "reject":
         base_request = build_effective_plan_request(
@@ -57,14 +68,15 @@ async def patch_recommendation_feedback(
             latest_meal_log=base_request.latest_meal_log,
             user_message=payload.message or base_request.user_message,
         )
-        replanned = execute_plan_request(
+        replanned = await execute_plan_request(
             db=db,
             request=effective_request,
             trigger=f"feedback_reject:{recommendation_id}",
         )
         replanned_id = replanned.id
         if parser_notes:
-            event.message = (payload.message or "") + f" | parser_notes={';'.join(parser_notes)}"
+            base_message = event.message or payload.message or ""
+            event.message = base_message + f" | parser_notes={';'.join(parser_notes)}"
             db.add(event)
 
     db.commit()

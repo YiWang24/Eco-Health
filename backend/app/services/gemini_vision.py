@@ -1,4 +1,4 @@
-"""Gemini Vision integration utilities for fridge/meal/receipt parsing."""
+"""OpenAI Vision integration utilities for fridge/meal/receipt parsing."""
 
 from __future__ import annotations
 
@@ -14,14 +14,12 @@ import httpx
 from app.core.config import get_settings
 
 try:
-    from google import genai
-    from google.genai import types
+    from openai import OpenAI
 
-    GEMINI_AVAILABLE = True
+    OPENAI_AVAILABLE = True
 except Exception:  # pragma: no cover - environment dependent
-    genai = None
-    types = None
-    GEMINI_AVAILABLE = False
+    OpenAI = None
+    OPENAI_AVAILABLE = False
 
 
 _DATA_URL_RE = re.compile(r"^data:(?P<mime>[^;]+);base64,(?P<data>.+)$", re.DOTALL)
@@ -47,7 +45,7 @@ def _extract_json_object(text: str) -> dict[str, Any] | None:
         return None
 
 
-def _guess_mime_type(image_ref: str, fallback: str = "image/jpeg") -> str:
+def _guess_mime_type(image_ref: str, default_mime: str = "image/jpeg") -> str:
     lower = image_ref.lower()
     if lower.endswith(".png"):
         return "image/png"
@@ -55,66 +53,91 @@ def _guess_mime_type(image_ref: str, fallback: str = "image/jpeg") -> str:
         return "image/webp"
     if lower.endswith(".gif"):
         return "image/gif"
-    return fallback
+    return default_mime
 
 
-def _build_image_part(image_ref: str):
-    if not types:
-        return None
-
+def _load_image_bytes(image_ref: str) -> tuple[bytes, str] | None:
+    """Load image from various sources and return (bytes, mime_type)."""
     image_ref = image_ref.strip()
     data_url_match = _DATA_URL_RE.match(image_ref)
     if data_url_match:
         mime = data_url_match.group("mime")
         decoded = base64.b64decode(data_url_match.group("data"))
-        return types.Part.from_bytes(data=decoded, mime_type=mime)
+        return decoded, mime
 
     if image_ref.startswith("http://") or image_ref.startswith("https://"):
-        response = httpx.get(image_ref, timeout=12.0)
-        response.raise_for_status()
-        content_type = response.headers.get("content-type", "")
-        mime_type = content_type.split(";", 1)[0].strip() or _guess_mime_type(image_ref)
-        if not mime_type.startswith("image/"):
-            mime_type = _guess_mime_type(image_ref)
-        return types.Part.from_bytes(data=response.content, mime_type=mime_type)
+        try:
+            response = httpx.get(image_ref, timeout=12.0)
+            response.raise_for_status()
+            content_type = response.headers.get("content-type", "")
+            mime_type = content_type.split(";", 1)[0].strip() or _guess_mime_type(image_ref)
+            if not mime_type.startswith("image/"):
+                mime_type = _guess_mime_type(image_ref)
+            return response.content, mime_type
+        except Exception:
+            return None
 
     local = Path(image_ref).expanduser()
     if local.exists() and local.is_file():
         mime_type = _guess_mime_type(local.name)
-        return types.Part.from_bytes(data=local.read_bytes(), mime_type=mime_type)
+        return local.read_bytes(), mime_type
 
     return None
+
+
+def _encode_image_to_base64_url(image_bytes: bytes, mime_type: str) -> str:
+    """Encode image bytes to base64 data URL for OpenAI API."""
+    base64_data = base64.b64encode(image_bytes).decode("utf-8")
+    return f"data:{mime_type};base64,{base64_data}"
 
 
 @lru_cache(maxsize=1)
 def _get_client():
     settings = get_settings()
-    if not GEMINI_AVAILABLE or not settings.gemini_api_key:
+    if not OPENAI_AVAILABLE or not settings.openai_api_key or OpenAI is None:
         return None
-    return genai.Client(api_key=settings.gemini_api_key)
+    return OpenAI(api_key=settings.openai_api_key, base_url=settings.railtracks_base_url)
 
 
 def _generate_structured_json(image_ref: str, prompt: str) -> dict[str, Any] | None:
     client = _get_client()
-    if not client or not types:
+    if not client:
         return None
 
-    image_part = _build_image_part(image_ref)
-    if not image_part:
+    image_result = _load_image_bytes(image_ref)
+    if not image_result:
         return None
+
+    image_bytes, mime_type = image_result
+    base64_image = _encode_image_to_base64_url(image_bytes, mime_type)
 
     settings = get_settings()
-    model = settings.adk_model or "gemini-2.0-flash"
-    response = client.models.generate_content(
-        model=model,
-        contents=[types.Part.from_text(text=prompt), image_part],
-        config=types.GenerateContentConfig(
-            responseMimeType="application/json",
+    model = settings.railtracks_model or "gpt-4o"
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": base64_image},
+                        },
+                    ],
+                }
+            ],
+            response_format={"type": "json_object"},
             temperature=0.1,
-            maxOutputTokens=700,
-        ),
-    )
-    payload = _extract_json_object(getattr(response, "text", "") or "")
+            max_tokens=700,
+        )
+    except Exception:
+        return None
+
+    content = response.choices[0].message.content
+    payload = _extract_json_object(content or "")
     return payload
 
 
@@ -150,7 +173,7 @@ def _normalize_ingredient_rows(
 
 
 def parse_fridge_ingredients_with_gemini(image_ref: str) -> list[dict[str, Any]]:
-    """Parse fridge image into normalized ingredient items."""
+    """Parse fridge image into normalized ingredient items using OpenAI Vision."""
 
     prompt = (
         "You are extracting ingredients from a fridge image. "
@@ -165,7 +188,7 @@ def parse_fridge_ingredients_with_gemini(image_ref: str) -> list[dict[str, Any]]
 
 
 def parse_meal_with_gemini(image_ref: str) -> dict[str, Any] | None:
-    """Parse meal image and estimate nutrition fields."""
+    """Parse meal image and estimate nutrition fields using OpenAI Vision."""
 
     prompt = (
         "Identify the meal and estimate macros. "
@@ -177,6 +200,7 @@ def parse_meal_with_gemini(image_ref: str) -> dict[str, Any] | None:
         return None
 
     meal_name = str(payload.get("meal_name") or "").strip()
+
     def _safe_int(value: Any, default: int) -> int:
         try:
             parsed = int(value)
@@ -194,7 +218,7 @@ def parse_meal_with_gemini(image_ref: str) -> dict[str, Any] | None:
 
 
 def parse_receipt_with_gemini(image_ref: str) -> list[dict[str, Any]]:
-    """Parse receipt image into normalized purchased items."""
+    """Parse receipt image into normalized purchased items using OpenAI Vision."""
 
     prompt = (
         "Extract grocery items from this shopping receipt image. "

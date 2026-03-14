@@ -102,7 +102,7 @@ def test_retrieve_recipe_candidates_prefers_multi_match_ids(monkeypatch) -> None
     assert candidates[0]["ingredient_details"][0]["ingredient"] == "tofu"
 
 
-def test_retrieve_recipe_candidate_falls_back_on_api_errors(monkeypatch) -> None:
+def test_retrieve_recipe_candidate_raises_on_api_errors(monkeypatch) -> None:
     planner.settings.recipe_api_base_url = "https://www.themealdb.com/api/json/v1/1"
 
     def failing_get(*args, **kwargs):  # noqa: ANN002, ANN003
@@ -115,10 +115,10 @@ def test_retrieve_recipe_candidate_falls_back_on_api_errors(monkeypatch) -> None
         items=[InventoryItem(ingredient="spinach", quantity="1 bunch", expires_in_days=1)],
     )
 
-    recipe = planner.retrieve_recipe_candidate(inventory)
+    import pytest
 
-    assert recipe["recipe_title"].startswith("Quick")
-    assert recipe["ingredient_details"]
+    with pytest.raises(RuntimeError, match="No recipe candidates available"):
+        planner.retrieve_recipe_candidate(inventory)
 
 
 def test_retrieve_recipe_candidates_ranks_by_calorie_target(monkeypatch) -> None:
