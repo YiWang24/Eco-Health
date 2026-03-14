@@ -29,6 +29,8 @@ cp .env.example .env
 Required contract (MVP):
 
 - `GEMINI_API_KEY`
+- `ADK_ENABLED`
+- `ADK_MODEL`
 - `COGNITO_REGION`
 - `COGNITO_USER_POOL_ID`
 - `COGNITO_CLIENT_ID`
@@ -37,3 +39,8 @@ Required contract (MVP):
 - `RECIPE_API_KEY`
 - `DATABASE_URL`
 - `REDIS_URL` (optional for this phase)
+
+## ADK Workflow Mode
+
+- If `ADK_ENABLED=true` and `GEMINI_API_KEY` is set, planner routes use Google ADK orchestrator.
+- If ADK is disabled/unavailable, planner automatically falls back to deterministic local workflow.

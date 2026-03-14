@@ -11,6 +11,8 @@ from fastapi.testclient import TestClient
 DB_FILE = Path(__file__).resolve().parent / "test_backend.db"
 os.environ["DATABASE_URL"] = f"sqlite:///{DB_FILE}"
 os.environ["ENV"] = "development"
+os.environ["ADK_ENABLED"] = "false"
+os.environ["GEMINI_API_KEY"] = ""
 
 from app.core.database import Base, engine
 from app.main import app

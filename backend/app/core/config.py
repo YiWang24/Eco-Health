@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     debug: bool = Field(default=True, alias="DEBUG")
 
     gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
+    adk_enabled: bool = Field(default=False, alias="ADK_ENABLED")
+    adk_model: str = Field(default="gemini-2.0-flash", alias="ADK_MODEL")
 
     cognito_region: str = Field(default="us-east-1", alias="COGNITO_REGION")
     cognito_user_pool_id: str = Field(default="", alias="COGNITO_USER_POOL_ID")

@@ -4,12 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.agents.workflow import get_agent_workflow
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.recommendation import Recommendation
 from app.schemas.auth import AuthContext
 from app.schemas.contracts import PlanRequest, RecommendationBundle
-from app.services.planner import calculate_nutrition, generate_grocery_gap, retrieve_recipe_candidate
 from app.services.user_context import ensure_user
 
 router = APIRouter(prefix="/planner", tags=["planner"])
@@ -37,25 +37,16 @@ async def create_recommendation(
     if request.user_id != current_user.user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden user scope")
 
-    recipe = retrieve_recipe_candidate(request.inventory)
-    nutrition = calculate_nutrition(recipe, request.inventory)
-    grocery_gap = generate_grocery_gap(recipe, request.inventory)
-    spoilage_alerts = []
-    if request.inventory:
-        spoilage_alerts = [
-            f"Use {item.ingredient} soon"
-            for item in request.inventory.items
-            if item.expires_in_days is not None and item.expires_in_days <= 2
-        ]
-
+    workflow = get_agent_workflow()
+    recommendation, trace_notes, mode = workflow.recommend(request)
     rec = Recommendation(
         user_id=current_user.user_id,
-        recipe_title=recipe["recipe_title"],
-        steps=recipe["steps"],
-        nutrition_summary=nutrition.model_dump(),
-        substitutions=recipe.get("substitutions") or [],
-        spoilage_alerts=spoilage_alerts,
-        grocery_gap=grocery_gap,
+        recipe_title=recommendation.recipe_title,
+        steps=recommendation.steps,
+        nutrition_summary=recommendation.nutrition_summary.model_dump(),
+        substitutions=recommendation.substitutions,
+        spoilage_alerts=recommendation.spoilage_alerts + [f"workflow_mode:{mode}"] + trace_notes[:5],
+        grocery_gap=[item.model_dump() for item in recommendation.grocery_gap],
     )
     db.add(rec)
     db.commit()

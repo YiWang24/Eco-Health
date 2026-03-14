@@ -1,5 +1,7 @@
 # Agent Specification (MVP)
 
+> Implementation status: ADK runtime orchestration is implemented in `backend/app/agents/workflow.py` with deterministic fallback when ADK is disabled/unavailable.
+
 ## 1. Objective
 
 Design an agentic backend that turns multimodal food context and user goals into actionable meal recommendations with automatic replanning.
