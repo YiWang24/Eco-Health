@@ -170,6 +170,59 @@ Fields:
 }
 ```
 
+#### `FridgeScanRequest`
+
+```json
+{
+  "image_url": "https://example.com/fridge.jpg",
+  "detected_items": [
+    {"ingredient": "spinach", "quantity": "1 bunch", "expires_in_days": 1}
+  ]
+}
+```
+
+#### `MealScanRequest`
+
+```json
+{
+  "image_url": "https://example.com/meal.jpg",
+  "meal_name": "tofu stir fry",
+  "calories": 520,
+  "protein_g": 28,
+  "carbs_g": 46,
+  "fat_g": 20
+}
+```
+
+#### `ReceiptScanRequest`
+
+```json
+{
+  "image_url": "https://example.com/receipt.jpg",
+  "items": [
+    {"ingredient": "tomato", "quantity": "4", "expires_in_days": 4}
+  ]
+}
+```
+
+#### `ChatMessageRequest`
+
+```json
+{
+  "message": "Make it vegetarian and under 500 calories"
+}
+```
+
+#### `ChatMessageResponse`
+
+```json
+{
+  "event_id": 21,
+  "user_id": "user-1",
+  "message": "Make it vegetarian and under 500 calories"
+}
+```
+
 ## 2. Endpoint Families
 
 Detailed endpoint list is in `docs/api/endpoint-catalog.md`.

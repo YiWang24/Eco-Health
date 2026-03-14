@@ -36,26 +36,31 @@ Base prefix: `/api/v1`
 ### `POST /inputs/fridge-scan`
 - Purpose: submit fridge image parse task.
 - Auth: required.
-- Request: image reference payload.
-- Response: `JobEnvelope`.
+- Request: `FridgeScanRequest`.
+- Response: `JobEnvelope` (`202 Accepted`).
 
 ### `POST /inputs/meal-scan`
 - Purpose: submit meal recognition + nutrition logging task.
 - Auth: required.
-- Request: image reference payload.
-- Response: `JobEnvelope`.
+- Request: `MealScanRequest`.
+- Response: `JobEnvelope` (`202 Accepted`).
 
 ### `POST /inputs/receipt-scan`
 - Purpose: submit receipt parse task and update pantry.
 - Auth: required.
-- Request: image reference payload.
-- Response: `JobEnvelope`.
+- Request: `ReceiptScanRequest`.
+- Response: `JobEnvelope` (`202 Accepted`).
 
 ### `POST /inputs/chat-message`
 - Purpose: add conversational constraints/instructions.
 - Auth: required.
-- Request: user message payload.
-- Response: accepted context event.
+- Request: `ChatMessageRequest`.
+- Response: `ChatMessageResponse`.
+
+### `GET /inputs/jobs/{job_id}`
+- Purpose: retrieve ingestion job status and result payload.
+- Auth: required.
+- Response: `JobEnvelope`.
 
 ## 3. Planning
 

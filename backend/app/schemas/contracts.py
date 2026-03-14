@@ -98,3 +98,38 @@ class JobEnvelope(BaseModel):
     job_id: str
     status: JobStatus
     result: dict[str, Any] | None = None
+
+
+class IngredientDetection(BaseModel):
+    ingredient: str
+    quantity: str | None = None
+    expires_in_days: int | None = None
+
+
+class FridgeScanRequest(BaseModel):
+    image_url: str
+    detected_items: list[IngredientDetection] = Field(default_factory=list)
+
+
+class MealScanRequest(BaseModel):
+    image_url: str
+    meal_name: str | None = None
+    calories: int | None = None
+    protein_g: int | None = None
+    carbs_g: int | None = None
+    fat_g: int | None = None
+
+
+class ReceiptScanRequest(BaseModel):
+    image_url: str
+    items: list[IngredientDetection] = Field(default_factory=list)
+
+
+class ChatMessageRequest(BaseModel):
+    message: str
+
+
+class ChatMessageResponse(BaseModel):
+    event_id: int
+    user_id: str
+    message: str

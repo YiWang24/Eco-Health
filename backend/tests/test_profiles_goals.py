@@ -1,26 +1,14 @@
 """Tests for phase-1 profile and goals behaviors."""
 
-import os
-
 from fastapi.testclient import TestClient
 
-os.environ["DATABASE_URL"] = "sqlite:///./test_phase1.db"
-os.environ["ENV"] = "development"
-
-from app.core.database import init_db
-from app.main import app
-
-init_db()
-client = TestClient(app)
-
-
-def test_profile_requires_auth() -> None:
+def test_profile_requires_auth(client: TestClient) -> None:
     response = client.get("/api/v1/profiles/user-1")
 
     assert response.status_code == 401
 
 
-def test_profile_put_then_get_roundtrip() -> None:
+def test_profile_put_then_get_roundtrip(client: TestClient) -> None:
     payload = {
         "age": 29,
         "height_cm": 171.5,
@@ -43,7 +31,7 @@ def test_profile_put_then_get_roundtrip() -> None:
     assert fetched.json()["dietary_preferences"] == ["vegetarian"]
 
 
-def test_goals_put_then_get_roundtrip() -> None:
+def test_goals_put_then_get_roundtrip(client: TestClient) -> None:
     payload = {
         "calories_target": 2100,
         "protein_g_target": 130,
