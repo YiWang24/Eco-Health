@@ -1,17 +1,16 @@
-# OpenAPI Contract (MVP)
+# OpenAPI Contract (MVP, Business Scope)
 
-This document defines the API contract to lock before backend implementation.
+This contract locks API behavior for the hackathon MVP.
 
 - Base URL (local): `http://localhost:8000`
 - API prefix: `/api/v1`
-- Auth: `Authorization: Bearer <cognito_access_token>` for protected routes
-- Content type: `application/json` unless noted
+- Planner engine: `Railtracks`
+- Auth: `Authorization: Bearer <cognito_access_token>`
+- Content type: `application/json`
 
 ## 1. Common Models
 
-### 1.1 Error Model
-
-`ProblemResponse`
+### 1.1 `ProblemResponse`
 
 ```json
 {
@@ -22,16 +21,7 @@ This document defines the API contract to lock before backend implementation.
 }
 ```
 
-Fields:
-
-- `code` (string): machine-readable error code
-- `message` (string): human-readable message
-- `trace_id` (string): request/run correlation id
-- `retryable` (boolean): safe to retry operation
-
-### 1.2 Async Job Envelope
-
-`JobEnvelope`
+### 1.2 `JobEnvelope`
 
 ```json
 {
@@ -41,14 +31,13 @@ Fields:
 }
 ```
 
-`status` enum:
-
+Status enum:
 - `PENDING`
 - `PROCESSING`
 - `COMPLETED`
 - `FAILED`
 
-### 1.3 Core Request/Response Types
+### 1.3 Core Contracts
 
 #### `ConstraintSet`
 
@@ -182,7 +171,9 @@ Fields:
 }
 ```
 
-#### `FridgeScanRequest`
+#### Input Payloads
+
+`FridgeScanRequest`
 
 ```json
 {
@@ -193,7 +184,7 @@ Fields:
 }
 ```
 
-#### `MealScanRequest`
+`MealScanRequest`
 
 ```json
 {
@@ -206,7 +197,7 @@ Fields:
 }
 ```
 
-#### `ReceiptScanRequest`
+`ReceiptScanRequest`
 
 ```json
 {
@@ -217,7 +208,7 @@ Fields:
 }
 ```
 
-#### `ChatMessageRequest`
+`ChatMessageRequest`
 
 ```json
 {
@@ -225,7 +216,7 @@ Fields:
 }
 ```
 
-#### `ChatMessageResponse`
+`ChatMessageResponse`
 
 ```json
 {
@@ -235,7 +226,7 @@ Fields:
 }
 ```
 
-#### `FeedbackResponse`
+`FeedbackResponse`
 
 ```json
 {
@@ -249,35 +240,33 @@ Fields:
 
 ## 2. Endpoint Families
 
-Detailed endpoint list is in `docs/api/endpoint-catalog.md`.
-
-Families:
+See `docs/api/endpoint-catalog.md`.
 
 - auth/profile/goals
 - inputs (fridge/meal/receipt/chat)
 - planning and replanning
 - planner run tracing
 - recommendation output surfaces
-- feedback and loop continuation
+- feedback loop
 
-## 3. Status and Error Rules
+## 3. Response Status Rules
 
-- `200` for successful read/update operations.
-- `202` for async ingestion trigger accepted (returns `JobEnvelope`).
-- `400` for schema/validation issues.
-- `401/403` for auth/authz failures.
-- `409` for conflicting profile/goal updates.
-- `422` for semantically invalid plan constraints.
-- `500` for internal failures with `ProblemResponse`.
-- `502/504` for provider bridge failures with retry hints.
+- `200`: successful read/write request.
+- `202`: accepted async ingestion request (`JobEnvelope`).
+- `400`: malformed request payload.
+- `401/403`: authentication/authorization failure.
+- `404`: entity not found.
+- `422`: invalid semantic constraints.
+- `500`: internal planner/runtime failure.
+- `502/504`: upstream provider bridge timeout/error.
 
-## 4. Compatibility Rules
+## 4. Hackathon Compatibility Rules
 
-- Additive changes only for hackathon phase.
-- No breaking changes to named contract types without version bump.
-- Unknown fields in incoming payloads should be ignored unless security-sensitive.
+- Additive contract changes only.
+- Keep `PlanRequest`, `RecommendationBundle`, `FeedbackPatch`, `JobEnvelope` stable.
+- Unknown fields in incoming payloads should be ignored in MVP.
 
-## 5. Notes on Replanning
+## 5. Replanning Rules
 
 - `POST /planner/recommendations/{recommendation_id}/replan` accepts optional `ReplanRequest`.
-- `PATCH /feedback/recommendations/{recommendation_id}` with `action=reject` triggers an automatic replan using persisted context + parsed message constraints.
+- `PATCH /feedback/recommendations/{recommendation_id}` with `action=reject` triggers automatic Railtracks replanning.

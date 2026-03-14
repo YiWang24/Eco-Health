@@ -1,213 +1,127 @@
-# Agent Specification (MVP)
+# Agent Specification (MVP, Railtracks)
 
-> Implementation status: ADK runtime orchestration is implemented in `backend/app/agents/workflow.py` with deterministic fallback when ADK is disabled/unavailable.
+> Implementation status: planner orchestration is migrated to Railtracks workflow execution.
 
-## 1. Objective
+## 1. Goal
 
-Design an agentic backend that turns multimodal food context and user goals into actionable meal recommendations with automatic replanning.
+Deliver a business-first agent that turns user food context into practical meal decisions:
 
-Primary optimization targets:
+- hit nutrition targets
+- prioritize expiring ingredients
+- reduce grocery waste and unnecessary purchases
 
-- nutrition goal adherence
-- spoilage reduction
-- grocery cost minimization
-
-## 2. ADK Agent Graph
+## 2. Railtracks Workflow Graph
 
 ```mermaid
 flowchart LR
-  U["User Input"] --> O["Orchestrator Agent"]
-  O --> V1["analyze_fridge_vision"]
-  O --> V2["analyze_meal_vision"]
-  O --> V3["parse_receipt_items"]
-  O --> R["retrieve_recipe_candidates"]
-  O --> M["calculate_meal_macros"]
-  O --> G["generate_grocery_gap"]
-  V1 --> O
-  V2 --> O
-  V3 --> O
-  R --> O
-  M --> O
-  G --> O
-  O --> X["Reflection Validator"]
-  X --> A["RecommendationBundle"]
+  U["User Inputs"] --> P["Perceive Node"]
+  P --> R["Reason Node"]
+  R --> T["Retrieve Node"]
+  T --> A["Act Node"]
+  A --> F["Reflect Node"]
+  F --> O["RecommendationBundle"]
 ```
 
-Components:
+### Node Responsibilities
 
-- **Orchestrator**: manages step order and tool invocation strategy.
-- **Tool adapters**: provider-specific wrappers with normalized I/O.
-- **Reflection validator**: hard-constraint checker before final output.
+- **Perceive**: collect profile/goals/pantry/intake/chat + latest scan signals.
+- **Reason**: resolve constraints and prioritize spoilage-sensitive ingredients.
+- **Retrieve**: fetch recipe candidates and metadata from TheMealDB adapter.
+- **Act**: construct recommendation, nutrition estimate, and grocery gap.
+- **Reflect**: enforce hard business constraints and patch unsafe outputs.
 
 ## 3. Tool Contracts (MVP)
 
-## 3.1 `analyze_fridge_vision(image_payload)`
+### 3.1 `analyze_fridge_vision(image_payload)`
 
 Input:
-
-- image uri/blob reference
-- optional user locale
+- fridge image reference
+- optional pre-detected items
 
 Output:
+- normalized ingredient list (`ingredient`, `quantity`, `expires_in_days`)
 
-- detected ingredients list
-- approximate quantity/unit
-- confidence per ingredient
-- spoilage risk hints (if available)
-
-Failure mode:
-
-- return structured parse error with retryable hint
-
-## 3.2 `analyze_meal_vision(image_payload)`
+### 3.2 `analyze_meal_vision(image_payload)`
 
 Input:
-
 - meal image reference
 
 Output:
+- meal label + estimated macros (`calories`, `protein_g`, `carbs_g`, `fat_g`)
 
-- detected dish label
-- estimated portion size
-- estimated calories/protein/carbs/fat
-
-Failure mode:
-
-- return uncertain classification with confidence threshold flag
-
-## 3.3 `parse_receipt_items(image_payload)`
+### 3.3 `parse_receipt_items(image_payload)`
 
 Input:
-
-- receipt image reference
+- grocery receipt image reference
 
 Output:
+- normalized purchased items list for pantry merge
 
-- normalized purchased item list
-- optional quantity and price extraction
-
-Failure mode:
-
-- partial extraction accepted with low-confidence marker
-
-## 3.4 `retrieve_recipe_candidates(query_constraints)`
+### 3.4 `retrieve_recipe_candidates(query_constraints)`
 
 Input:
-
-- prioritized ingredients
-- restriction/allergy rules
-- macro and cook-time limits
-- budget preference
+- ingredient priority
+- dietary/allergy rules
+- calorie/macro/cook-time/budget targets
 
 Output:
+- ranked candidates with parsed recipe metadata
 
-- top-N candidate recipes with source metadata
-- parsed fields include: `idMeal`, `strMeal`, `strCategory`, `strArea`, `strMealThumb`, `strYoutube`, `strSource`, and normalized `ingredient + measure` pairs
-
-Failure mode:
-
-- timeout/error response with fallback recommendation trigger
-
-## 3.5 `calculate_meal_macros(recipe_ingredients)`
-
-Input:
-
-- candidate ingredient list with portions
+### 3.5 `calculate_meal_macros(recipe_ingredients)`
 
 Output:
+- nutrition estimate used for scoring and response rendering
 
-- nutrition estimate object
-
-Failure mode:
-
-- low-confidence macro estimate flag
-
-## 3.6 `generate_grocery_gap(recipe_ingredients, current_inventory)`
-
-Input:
-
-- selected recipe ingredients
-- user inventory snapshot
+### 3.6 `generate_grocery_gap(recipe_ingredients, current_inventory)`
 
 Output:
-
-- minimal missing ingredient list with reason
-
-Failure mode:
-
-- conservative list with uncertainty notes
+- minimal missing ingredients list with reason strings
 
 ## 4. Memory Policy
 
-## 4.1 Short-Term Session State
+### 4.1 Short-Term Runtime State
 
-Persist in active run context:
+- current workflow inputs
+- candidate ranking context
+- interim substitution decisions
 
-- latest user instruction deltas
-- in-progress plan candidates
-- temporary substitutions
-- pending async job references
+### 4.2 Long-Term Persisted Memory
 
-Retention:
+- profile/goals
+- pantry and receipt history
+- meal history
+- recommendation and feedback history
 
-- session lifetime or explicit reset
+## 5. Reflection Policy (Business Hard Checks)
 
-## 4.2 Long-Term Persisted State
+1. remove allergen conflicts from output
+2. remove non-compliant ingredients for vegetarian/vegan constraints
+3. enforce calorie/macro direction via substitution guidance
+4. enforce spoilage-priority reminders
+5. enforce grocery-gap consistency with selected recipe
 
-Persist in database:
+If a perfect candidate is unavailable, return best feasible plan plus explicit adjustment hints.
 
-- user profile and goals
-- historical meal logs
-- pantry trajectory and receipt events
-- recommendation history and feedback events
+## 6. Feedback-Driven Replanning Policy
 
-Retention:
+- `reject` feedback text is parsed into structured overrides (calorie/time/restriction/allergy hints).
+- Parsed overrides merge with stored goals.
+- Same Railtracks workflow reruns with updated constraints.
+- New recommendation is persisted and linked through `plan_runs` + `feedback_events`.
 
-- persistent by default with user delete/export controls (post-MVP hardening)
+## 7. Output Contract
 
-## 5. Reflection Policy
+Primary output is `RecommendationBundle`:
 
-Hard checks before returning recommendation:
+- `recipe_title`
+- `steps`
+- `nutrition_summary`
+- `substitutions`
+- `spoilage_alerts`
+- `grocery_gap`
 
-1. allergy and dietary restriction compliance
-2. calorie/macro budget feasibility
-3. spoilage-priority usage (when expiring ingredients exist)
-4. ingredient availability with explicit grocery gap
-5. plan feasibility under max cook-time
-6. remove non-compliant grocery items (allergy + vegetarian/vegan hard filters)
-7. enforce spoilage-priority reminders for expiring pantry items
+Secondary output for trace/debug:
 
-If validation fails:
-
-- retry once with stricter filters
-- if still failing, return safe fallback plan and explicit unmet-constraint explanation
-
-Feedback-driven replan:
-
-- reject feedback messages are parsed into structured overrides (for example: calories, time, vegetarian/vegan, allergy hints)
-- parsed constraints are merged with persisted goals before rerunning planner
-
-## 6. Prompting and Guardrails
-
-Prompt strategy:
-
-- system prompt encodes optimization hierarchy and hard constraints.
-- tool outputs are normalized to deterministic schema before reasoning.
-- final answer must conform to `RecommendationBundle` schema.
-
-Guardrails:
-
-- never recommend known allergens from user profile.
-- never hide uncertainty; surface confidence/fallback markers.
-- avoid fabricated nutrition claims when tool confidence is low.
-
-## 7. Safe Fallback Response
-
-When tool failures block full optimization, return:
-
-- one conservative recipe option
-- explicit assumptions
-- user action request (for example, confirm ingredient availability)
-- suggestion to retry scan/replan
-
-This keeps the user flow functional even under degraded provider conditions.
+- `plan_runs.status`
+- `plan_runs.mode` (`railtracks` or `fallback`)
+- `plan_runs.trace_notes`

@@ -1,149 +1,117 @@
-# MVP Task List
+# MVP Task List (Business Features Only)
 
-This checklist is execution-ready for the backend-first hackathon build.
+This checklist is scoped for hackathon business delivery. Non-functional items are intentionally excluded.
 
-## Phase 0 - Scaffolding + Env + CI Baseline
+## Phase 1 - Onboarding and Goal Setup
 
-### Task 0.1: Repository skeleton and module boundaries
-- Owner: `TBD`
+### Task 1.1: User sign-in bootstrap
+- Owner: `Backend`
 - Estimate: `0.5 day`
 - Dependencies: none
-- Done criteria: backend/frontend/docs folders exist with baseline structure.
+- Done criteria: authenticated user identity is available in protected API routes.
 
-### Task 0.2: Environment contract and local boot
-- Owner: `TBD`
+### Task 1.2: Profile create/update/read
+- Owner: `Backend`
 - Estimate: `0.5 day`
-- Dependencies: Task 0.1
-- Done criteria: `.env.example` covers all MVP vars; local server boots with placeholder routes.
-
-### Task 0.3: CI baseline (lint + tests)
-- Owner: `TBD`
-- Estimate: `0.5 day`
-- Dependencies: Task 0.2
-- Done criteria: CI pipeline runs formatting, static checks, and test command for PRs.
-
-## Phase 1 - Auth / Profile / Goals
-
-### Task 1.1: Cognito token verification middleware
-- Owner: `TBD`
-- Estimate: `1 day`
-- Dependencies: Phase 0
-- Done criteria: protected routes validate Cognito JWT and map identity to app user.
-
-### Task 1.2: Profile CRUD endpoints
-- Owner: `TBD`
-- Estimate: `0.75 day`
 - Dependencies: Task 1.1
-- Done criteria: profile create/read/update works with persistence.
+- Done criteria: profile API supports full onboarding data roundtrip.
 
-### Task 1.3: Goal CRUD endpoints
-- Owner: `TBD`
-- Estimate: `0.75 day`
-- Dependencies: Task 1.1
-- Done criteria: nutrition and planning constraints are persisted and retrievable.
-
-## Phase 2 - Multimodal Input Ingestion
-
-### Task 2.1: Fridge scan ingestion and async parse pipeline
-- Owner: `TBD`
-- Estimate: `1 day`
-- Dependencies: Phase 1
-- Done criteria: fridge input accepted, async parse runs, pantry state updates.
-
-### Task 2.2: Meal scan ingestion and nutrition log update
-- Owner: `TBD`
-- Estimate: `1 day`
-- Dependencies: Phase 1
-- Done criteria: meal scan updates `meal_logs` with macro estimates.
-
-### Task 2.3: Receipt scan ingestion and pantry merge
-- Owner: `TBD`
-- Estimate: `1 day`
-- Dependencies: Phase 1
-- Done criteria: receipt parser adds purchased items and de-duplicates pantry records.
-
-### Task 2.4: Chat context ingestion endpoint
-- Owner: `TBD`
+### Task 1.3: Goal create/update/read
+- Owner: `Backend`
 - Estimate: `0.5 day`
+- Dependencies: Task 1.1
+- Done criteria: nutrition + restriction + budget/time goals persist and load correctly.
+
+## Phase 2 - Multimodal Food Context Ingestion
+
+### Task 2.1: Receipt ingestion pipeline
+- Owner: `Backend`
+- Estimate: `0.75 day`
 - Dependencies: Phase 1
-- Done criteria: user natural-language instructions are stored for planner context.
+- Done criteria: receipt scan updates pantry inventory via async job.
 
-## Phase 3 - Planner + Recipe Retrieval + Grocery Gap
+### Task 2.2: Fridge ingestion pipeline
+- Owner: `Backend`
+- Estimate: `0.75 day`
+- Dependencies: Phase 1
+- Done criteria: fridge scan extracts ingredients and spoilage hints into pantry state.
 
-### Task 3.1: Plan request assembly service
-- Owner: `TBD`
-- Estimate: `1 day`
+### Task 2.3: Meal ingestion pipeline
+- Owner: `Backend`
+- Estimate: `0.75 day`
+- Dependencies: Phase 1
+- Done criteria: meal scan writes meal log with macro estimates.
+
+### Task 2.4: Chat message context endpoint
+- Owner: `Backend`
+- Estimate: `0.25 day`
+- Dependencies: Phase 1
+- Done criteria: user messages are persisted and retrievable for planning context.
+
+## Phase 3 - Railtracks Planner Core
+
+### Task 3.1: Effective context builder
+- Owner: `Backend`
+- Estimate: `0.5 day`
 - Dependencies: Phase 2
-- Done criteria: planner combines goals, intake, pantry, and chat context into `PlanRequest`.
+- Done criteria: planner request auto-merges goals/pantry/meal/chat context when omitted.
 
-### Task 3.2: Recipe retrieval adapter (external API)
-- Owner: `TBD`
-- Estimate: `1 day`
+### Task 3.2: Recipe candidate retrieval
+- Owner: `Backend`
+- Estimate: `0.75 day`
 - Dependencies: Task 3.1
-- Done criteria: recipe candidates returned with timeout handling and source metadata.
+- Done criteria: TheMealDB candidates are fetched and normalized into internal recipe format.
 
-### Task 3.3: Macro calculator and constraint scorer
-- Owner: `TBD`
+### Task 3.3: Candidate scoring + selection
+- Owner: `Backend`
 - Estimate: `0.75 day`
 - Dependencies: Task 3.2
-- Done criteria: candidates scored against macro/time/restriction constraints.
+- Done criteria: ranking considers goals, restrictions, allergies, spoilage, and grocery gap size.
 
-### Task 3.4: Grocery gap generation
-- Owner: `TBD`
+### Task 3.4: Recommendation output assembly
+- Owner: `Backend`
 - Estimate: `0.5 day`
 - Dependencies: Task 3.3
-- Done criteria: minimal missing ingredients output with reasons.
-
-### Task 3.5: Recommendation bundle endpoint
-- Owner: `TBD`
-- Estimate: `0.75 day`
-- Dependencies: Tasks 3.1-3.4
-- Done criteria: endpoint returns stable `RecommendationBundle` contract.
+- Done criteria: `RecommendationBundle` returns recipe steps, nutrition, substitutions, alerts, and grocery gap.
 
 ## Phase 4 - Feedback Replan Loop
 
-### Task 4.1: Feedback patch endpoint and persistence
-- Owner: `TBD`
-- Estimate: `0.5 day`
+### Task 4.1: Feedback persistence
+- Owner: `Backend`
+- Estimate: `0.25 day`
 - Dependencies: Phase 3
-- Done criteria: accept/reject feedback stored with message.
+- Done criteria: accept/reject feedback stored with recommendation link.
 
-### Task 4.2: Replan trigger from feedback
-- Owner: `TBD`
+### Task 4.2: Reject -> replan workflow
+- Owner: `Backend`
 - Estimate: `0.75 day`
 - Dependencies: Task 4.1
-- Done criteria: feedback triggers updated recommendation while retaining traceability.
+- Done criteria: reject feedback triggers a new planner run and returns a new recommendation id.
 
-### Task 4.3: Agent trace capture
-- Owner: `TBD`
+### Task 4.3: Feedback text constraint parsing
+- Owner: `Backend`
 - Estimate: `0.5 day`
 - Dependencies: Task 4.2
-- Done criteria: each run stores stage-level trace notes for debugging/demo.
+- Done criteria: text instructions (e.g. low calorie, vegetarian, 15 mins) are converted to structured overrides.
 
-## Phase 5 - Polish, Observability, Demo Script
+## Phase 5 - Demo-Ready End-to-End Flow
 
-### Task 5.1: Structured logging and trace IDs
-- Owner: `TBD`
+### Task 5.1: One-shot scripted API flow
+- Owner: `Backend`
 - Estimate: `0.5 day`
 - Dependencies: Phases 1-4
-- Done criteria: all key endpoints emit consistent traceable logs.
+- Done criteria: scripted run demonstrates onboarding -> scans -> planner -> feedback replan.
 
-### Task 5.2: Resilience pass (timeouts, retries, fallback)
-- Owner: `TBD`
+### Task 5.2: Real E2E test with generated images
+- Owner: `Backend`
 - Estimate: `0.75 day`
-- Dependencies: Phases 2-4
-- Done criteria: degraded provider modes return safe fallback behavior.
+- Dependencies: Task 5.1
+- Done criteria: optional real E2E test executes full flow using generated receipt/fridge/meal images.
 
-### Task 5.3: End-to-end demo script and sample dataset
-- Owner: `TBD`
-- Estimate: `0.5 day`
-- Dependencies: all previous phases
-- Done criteria: repeatable live demo flow works from onboarding to feedback replan.
+## Business Acceptance Scenarios
 
-## Cross-Cutting Test Scenarios
-
-1. Contract tests for all public schemas and status transitions.
-2. Agent-loop scenarios: fridge-only, meal-only, receipt-only, combined-input.
-3. Constraint tests: allergy conflict, calorie overflow, substitution, spoilage priority.
-4. Integrations: Cognito verification, PostgreSQL persistence, recipe API timeout fallback.
-5. Demo acceptance run: full user journey from signup context to replanned recommendation.
+1. User can complete onboarding and set goals.
+2. User can submit receipt/fridge/meal scans and get planner-ready context.
+3. Planner returns actionable recommendation bundle.
+4. User can send chat constraints and get updated recommendations.
+5. Reject feedback triggers automatic replanning with new recommendation output.

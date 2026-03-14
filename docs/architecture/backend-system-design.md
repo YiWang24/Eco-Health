@@ -1,115 +1,100 @@
-# Backend System Design
+# Backend System Design (Hackathon Business Scope)
 
 ## 1. Architecture Style
 
-This MVP uses a **modular monolith** backend:
+This MVP uses a **modular monolith** backend focused on business delivery speed:
 
-- **Framework**: FastAPI
-- **Agent orchestration**: Google ADK (orchestrator + tool adapters)
+- **API framework**: FastAPI
+- **Agent orchestration**: Railtracks workflow engine
 - **Data**: PostgreSQL + pgvector
 - **Authentication**: AWS Cognito
-- **Recipe knowledge source**: external recipe API
-- **Async execution model**: synchronous API with `BackgroundTasks` for vision parsing and replanning
+- **Recipe source**: TheMealDB (external API)
+- **Async model**: `BackgroundTasks` for scan ingestion; synchronous planning/replanning endpoints
 
-Why this shape for hackathon:
+## 2. Business Runtime Flow
 
-- Faster delivery than microservices.
-- Clear module boundaries for future extraction.
-- Enough structure for reliable demo and extension.
-
-## 2. Runtime Flow
-
-### 2.1 Request Handling
-
-1. Client calls FastAPI endpoint with Cognito bearer token.
-2. API validates token, normalizes payload, persists event.
-3. For heavy ingestion operations (image analysis), API schedules `BackgroundTasks` and returns `JobEnvelope`.
-4. Planner and feedback-driven replan execute synchronously for deterministic demo output.
-5. Background task executes tool calls and writes results.
-6. Client polls job/recommendation endpoints for final output.
-
-### 2.2 Sync + Async Split
-
-- **Sync**: profile/goals CRUD, plan trigger, recommendation read paths.
-- **Async**: fridge scan parse, meal scan parse, receipt parse.
+1. User authenticates and sets profile/goals.
+2. User submits multimodal context (receipt/fridge/meal/chat).
+3. Ingestion pipelines normalize input into pantry/intake/memory state.
+4. User triggers planner endpoint.
+5. Railtracks workflow runs: `Perceive -> Reason -> Retrieve -> Act -> Reflect`.
+6. Backend returns actionable recommendation bundle.
+7. User feedback (`accept`/`reject + instruction`) triggers replanning.
 
 ## 3. Domain Modules
 
-- `auth`: Cognito token verification and identity mapping.
-- `profiles`: onboarding profile and user preferences.
-- `goals`: nutrition targets, dietary restrictions, budget/time constraints.
-- `inventory`: pantry state and receipt/fridge updates.
-- `intake`: meal logs and macro progress state.
-- `planner`: plan request, recommendation generation, replan triggers.
-- `recipes`: retrieval adapter and recipe normalization.
-- `feedback`: accept/reject signals and iterative adjustment history.
+- `auth`: Cognito identity mapping and user scope control.
+- `profiles`: onboarding health baseline.
+- `goals`: calorie/macro/restriction/budget/time targets.
+- `inventory`: pantry state from receipt/fridge events.
+- `intake`: meal logs and nutrition history.
+- `planner`: Railtracks run orchestration and recommendation creation.
+- `recipes`: candidate retrieval + normalization from TheMealDB.
+- `feedback`: accept/reject loop and constraint overrides.
 
-## 4. Data Model Definitions
+## 4. Data Model (Business Entities)
 
-## 4.1 Core Entities
-
-| Entity | Purpose | Key Fields |
+| Entity | Purpose | Core Fields |
 |---|---|---|
-| `users` | app-level user identity mapped from Cognito | `id`, `cognito_sub`, `email`, `created_at` |
-| `goals` | nutrition and lifestyle constraints | `user_id`, `calories_target`, `protein_target`, `dietary_restrictions`, `budget_limit`, `max_cook_time` |
-| `pantry_items` | current inventory and expiry context | `user_id`, `ingredient`, `quantity`, `source`, `expires_at`, `updated_at` |
-| `receipt_events` | raw + parsed receipt ingestion record | `user_id`, `image_uri`, `parsed_items`, `created_at` |
-| `meal_logs` | recognized meals and macros | `user_id`, `meal_name`, `calories`, `protein_g`, `carbs_g`, `fat_g`, `eaten_at` |
-| `plan_runs` | agent run metadata and lifecycle | `id`, `user_id`, `status`, `request_payload`, `trace`, `created_at` |
-| `recommendations` | actionable meal plan output | `id`, `plan_run_id`, `recipe_title`, `steps`, `nutrition_summary`, `grocery_gap`, `created_at` |
-| `feedback_events` | user accept/reject and instruction deltas | `user_id`, `recommendation_id`, `action`, `message`, `created_at` |
+| `users` | app user identity | `id`, `email`, timestamps |
+| `profiles` | personal baseline context | `age`, `height_cm`, `weight_kg`, `activity_level`, preferences/allergies |
+| `goals` | optimization targets | calories/macros, restrictions, budget, max cook time |
+| `pantry_items` | current ingredients | `ingredient`, `quantity`, `expires_in_days`, `source` |
+| `receipt_events` | purchased-food extraction history | `image_url`, `parsed_items` |
+| `meal_logs` | consumed meal history | meal name + macro estimates |
+| `chat_messages` | user intent deltas | natural language instruction |
+| `plan_runs` | planner execution record | `status`, `mode`, `request_payload`, `trace_notes` |
+| `recommendations` | actionable output | recipe title, steps, nutrition, substitutions, grocery gap |
+| `feedback_events` | user decisions over plans | `action`, `message`, `recommendation_id` |
 
-## 4.2 Vector/Similarity Support
+## 5. Railtracks Agent Loop Design
 
-- `recipe_embeddings` table (or materialized view) in PostgreSQL with pgvector for retrieval hints.
-- During MVP, external recipe API remains source-of-truth; pgvector is reserved for hybrid retrieval next step.
+### 5.1 Workflow Stages
 
-## 5. Agent Loop and Failure Fallback
+1. **Perceive**
+   - read latest profile/goals/pantry/intake/chat context
+   - parse latest multimodal payloads if pending
+2. **Reason**
+   - prioritize expiring ingredients
+   - apply goal and restriction constraints
+3. **Retrieve**
+   - call recipe adapter for candidate set
+   - enrich with normalized recipe metadata
+4. **Act**
+   - select best candidate and build `RecommendationBundle`
+   - compute grocery gap and nutrition estimate
+5. **Reflect**
+   - enforce allergy/restriction checks
+   - enforce macro/time/spoilage priorities
+   - add substitution guidance if needed
 
-## 5.1 Sequence
+### 5.2 Replanning Entry Points
 
-1. **Perceive**: parse input modalities and normalize signals.
-2. **Reason**: combine goals, current intake, inventory freshness, budget/time.
-3. **Retrieve**: fetch recipe candidates using structured constraints.
-4. **Act**: produce recommendation bundle + grocery gap.
-5. **Reflect**: validate hard constraints before response finalization.
+- `POST /planner/recommendations/{id}/replan` for explicit manual replan.
+- `PATCH /feedback/recommendations/{id}` with `action=reject` for conversational replan.
 
-## 5.2 Failure Fallback Strategy
+Both paths rebuild context and rerun the same Railtracks workflow.
 
-- Vision parse failure: keep prior state and request manual confirmation.
-- Recipe API timeout: use cached candidate or return constrained fallback meal template.
-- Constraint violation after reflect: auto-retry with stricter filters once, then return safe minimal option.
-- Async task crash: mark job `FAILED`, include `trace_id`, and expose retryable reason.
+## 6. Business Fallback Rules (MVP)
 
-## 6. Non-Functional Requirements (Hackathon)
+- Vision parse fails -> keep request accepted, use safe default extraction.
+- Recipe API fails -> return fallback local recipe pattern.
+- Constraint conflict -> reflection injects substitutions/alerts and returns best feasible option.
+- Feedback with vague text -> parse what can be extracted and keep existing goals for remaining fields.
 
-## 6.1 Latency Targets
+## 7. Hackathon Scope Boundary
 
-- Sync CRUD endpoints: p95 < 300 ms
-- Plan trigger endpoint: p95 < 600 ms (queueing accepted)
-- Async completion for scans/replan: typically < 20 s in demo environment
+In-scope business features:
 
-## 6.2 Graceful Degradation
+1. onboarding profile + goals
+2. receipt/fridge/meal/chat ingestion
+3. Railtracks planner recommendation
+4. recipe retrieval + metadata
+5. grocery gap output
+6. feedback-driven automatic replan
 
-- If vision provider unavailable, permit manual ingredient input route (next implementation task).
-- If recipe provider unavailable, return constrained baseline recipe pattern and missing data warning.
+Out of scope in this phase:
 
-## 6.3 Observability Basics
-
-- Structured JSON logs with `trace_id`, `user_id`, `plan_run_id`.
-- Basic metrics: request count, error count, async job state distribution.
-- Health endpoint for uptime checks.
-
-## 7. Security and Compliance Baseline
-
-- Cognito JWT verification at API boundary (JWKS signature validation).
-- No secrets in repository; use environment contract.
-- PII minimization in logs (mask email/image URLs where needed).
-- Basic rate limiting and payload size guards for image endpoints (implementation phase).
-
-## 8. Deployment Notes (MVP)
-
-- Single FastAPI service container.
-- Managed PostgreSQL instance with pgvector extension enabled.
-- Optional Redis reserved but not required in current `BackgroundTasks` mode.
-- Environment-specific config via `.env` in dev and secret manager in hosted deployment.
+- dashboard analytics UI
+- calendar scheduling automation
+- long-term optimization beyond current meal cycle
