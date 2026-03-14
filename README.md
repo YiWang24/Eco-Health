@@ -134,6 +134,10 @@ cp .env.example .env
 uvicorn app.main:app --reload --port 8000
 ```
 
+Notes:
+- For real Gemini Vision parsing, set `GEMINI_API_KEY` in `backend/.env`.
+- Input image URLs must be reachable by the backend service.
+
 Frontend:
 
 - `frontend/` currently contains placeholder documentation only.

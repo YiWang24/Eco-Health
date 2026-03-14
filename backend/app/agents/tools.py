@@ -5,6 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 from app.schemas.contracts import ConstraintSet, InventorySnapshot
+from app.services.gemini_vision import (
+    parse_fridge_ingredients_with_gemini,
+    parse_meal_with_gemini,
+    parse_receipt_with_gemini,
+)
 from app.services.planner import (
     calculate_nutrition,
     generate_grocery_gap,
@@ -16,7 +21,16 @@ from app.services.planner import (
 def analyze_fridge_vision(image_url: str, detected_items: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """Normalize fridge scan signals into ingredient inventory."""
 
-    items = detected_items or [
+    if detected_items:
+        return {"image_url": image_url, "ingredients": detected_items}
+
+    parsed_items: list[dict[str, Any]] = []
+    try:
+        parsed_items = parse_fridge_ingredients_with_gemini(image_url)
+    except Exception:
+        parsed_items = []
+
+    items = parsed_items or [
         {"ingredient": "spinach", "quantity": "1 bunch", "expires_in_days": 1},
         {"ingredient": "tofu", "quantity": "400g", "expires_in_days": 2},
     ]
@@ -33,20 +47,36 @@ def analyze_meal_vision(
 ) -> dict[str, Any]:
     """Return normalized meal recognition and nutrition estimate."""
 
+    parsed = None
+    if not any([meal_name, calories, protein_g, carbs_g, fat_g]):
+        try:
+            parsed = parse_meal_with_gemini(image_url)
+        except Exception:
+            parsed = None
+
     return {
         "image_url": image_url,
-        "meal_name": meal_name or "recognized meal",
-        "calories": calories or 520,
-        "protein_g": protein_g or 28,
-        "carbs_g": carbs_g or 46,
-        "fat_g": fat_g or 20,
+        "meal_name": meal_name or ((parsed or {}).get("meal_name")) or "recognized meal",
+        "calories": calories or ((parsed or {}).get("calories")) or 520,
+        "protein_g": protein_g or ((parsed or {}).get("protein_g")) or 28,
+        "carbs_g": carbs_g or ((parsed or {}).get("carbs_g")) or 46,
+        "fat_g": fat_g or ((parsed or {}).get("fat_g")) or 20,
     }
 
 
 def parse_receipt_items(image_url: str, items: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """Normalize receipt extraction payload."""
 
-    parsed = items or [
+    if items:
+        return {"image_url": image_url, "items": items}
+
+    parsed_items: list[dict[str, Any]] = []
+    try:
+        parsed_items = parse_receipt_with_gemini(image_url)
+    except Exception:
+        parsed_items = []
+
+    parsed = parsed_items or [
         {"ingredient": "tomato", "quantity": "4", "expires_in_days": 4},
         {"ingredient": "onion", "quantity": "2", "expires_in_days": 7},
     ]
