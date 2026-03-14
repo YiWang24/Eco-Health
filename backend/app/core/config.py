@@ -10,7 +10,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Runtime configuration contract for the backend MVP."""
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", case_sensitive=True)
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore",
+    )
 
     app_name: str = Field(default="Eco-Health Agentic Dietitian API", alias="APP_NAME")
     api_v1_str: str = Field(default="/api/v1", alias="API_V1_STR")
@@ -22,7 +27,9 @@ class Settings(BaseSettings):
     cognito_region: str = Field(default="us-east-1", alias="COGNITO_REGION")
     cognito_user_pool_id: str = Field(default="", alias="COGNITO_USER_POOL_ID")
     cognito_client_id: str = Field(default="", alias="COGNITO_CLIENT_ID")
+    cognito_client_secret: str = Field(default="", alias="COGNITO_CLIENT_SECRET")
     cognito_issuer: str = Field(default="", alias="COGNITO_ISSUER")
+    cognito_user_pool_arn: str = Field(default="", alias="COGNITO_USER_POOL_ARN")
 
     recipe_api_base_url: str = Field(default="", alias="RECIPE_API_BASE_URL")
     recipe_api_key: str = Field(default="", alias="RECIPE_API_KEY")
