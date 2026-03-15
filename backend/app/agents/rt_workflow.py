@@ -62,7 +62,7 @@ class RailtracksAgenticWorkflow:
         except Exception:  # pragma: no cover - environment dependent
             self._enabled = False
 
-    def _build_agent(self) -> rt.Agent:
+    def _build_agent(self):
         instruction = (
             "You are Eco-Health Agentic Dietitian planner. "
             "Given user constraints, prioritized ingredients, retrieved context, and a candidate recipe, "
@@ -76,20 +76,31 @@ class RailtracksAgenticWorkflow:
             decompose_cooking_workflow,
             schedule_proactive_prep,
         ]
-        if self._vector_store:
+        if hasattr(rt, "Agent"):
+            if self._vector_store:
+                return rt.Agent(
+                    name="eco_health_agentic_planner",
+                    llm=self._llm,
+                    instruction=instruction,
+                    tools=tools,
+                    vector_store=self._vector_store,
+                    output_schema=RtRecommendationOutput,
+                )
             return rt.Agent(
                 name="eco_health_agentic_planner",
                 llm=self._llm,
                 instruction=instruction,
                 tools=tools,
-                vector_store=self._vector_store,
                 output_schema=RtRecommendationOutput,
             )
-        return rt.Agent(
+
+        rag_config = rt.RagConfig(vector_store=self._vector_store, top_k=3) if self._vector_store else None
+        return rt.agent_node(
             name="eco_health_agentic_planner",
             llm=self._llm,
-            instruction=instruction,
-            tools=tools,
+            system_message=instruction,
+            tool_nodes=tools,
+            rag=rag_config,
             output_schema=RtRecommendationOutput,
         )
 
@@ -199,11 +210,16 @@ class RailtracksAgenticWorkflow:
             retrieved_context=retrieved_context,
             attempt=attempt,
         )
-        result = await self._agent.run_async(prompt)
-        if not result or not result.content:
+        if hasattr(self._agent, "run_async"):
+            result = await self._agent.run_async(prompt)
+        else:
+            result = await rt.call(self._agent, prompt)
+
+        content = getattr(result, "content", result)
+        if not content:
             raise ValueError("No Railtracks response content produced")
 
-        parsed = self._parse_railtracks_output(result.content)
+        parsed = self._parse_railtracks_output(content)
         bundle = AgentDraftBundle(
             recipe_title=parsed.recipe_title,
             steps=parsed.steps,
@@ -311,8 +327,17 @@ class RailtracksAgenticWorkflow:
         )
 
     @staticmethod
-    def _parse_railtracks_output(content: str) -> RtRecommendationOutput:
-        content = content.strip()
+    def _parse_railtracks_output(content: Any) -> RtRecommendationOutput:
+        if isinstance(content, RtRecommendationOutput):
+            return content
+
+        if isinstance(content, dict):
+            return RtRecommendationOutput.model_validate(content)
+
+        if hasattr(content, "model_dump"):
+            return RtRecommendationOutput.model_validate(content.model_dump())
+
+        content = str(content).strip()
         try:
             return RtRecommendationOutput.model_validate_json(content)
         except Exception:
