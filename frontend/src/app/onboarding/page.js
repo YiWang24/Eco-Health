@@ -168,10 +168,9 @@ export default function OnboardingPage() {
         max_cook_time_minutes: Number(form.cook_time_preference_minutes) || null,
       };
 
-      await Promise.all([
-        upsertProfile(userId, profilePayload),
-        upsertGoals(userId, goalsPayload),
-      ]);
+      // Save profile first, then goals to avoid first-login write races.
+      await upsertProfile(userId, profilePayload);
+      await upsertGoals(userId, goalsPayload);
 
       router.push("/dashboard");
     } catch (err) {
