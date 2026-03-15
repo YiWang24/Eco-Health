@@ -43,6 +43,7 @@ def test_planner_uses_persisted_context_and_exposes_latest_run(client: TestClien
     assert created.status_code == 200
     assert created.json()["recommendation_id"]
     assert isinstance(created.json().get("recipe_metadata"), dict)
+    assert "thumbnail_url" in created.json().get("recipe_metadata", {})
 
     latest_run = client.get(f"/api/v1/planner/runs/latest/{user_id}", headers=headers)
     assert latest_run.status_code == 200

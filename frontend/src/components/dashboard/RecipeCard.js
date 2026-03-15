@@ -1,9 +1,8 @@
 import Link from "next/link";
+import { getRecipeFallbackImage } from "@/utils/recipeImages";
 
 export default function RecipeCard({ title, kcal, time, imageUrl, href }) {
-  const safeImage =
-    imageUrl ||
-    "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80";
+  const safeImage = imageUrl || getRecipeFallbackImage(title);
 
   const content = (
     <>

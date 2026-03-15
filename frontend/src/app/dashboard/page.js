@@ -9,6 +9,7 @@ import SmartSuggestion from "@/components/dashboard/SmartSuggestion";
 import RecipeCard from "@/components/dashboard/RecipeCard";
 import EmptyState from "@/components/ui/EmptyState";
 import { ROUTES } from "@/lib/constants";
+import { getRecipeFallbackImage } from "@/utils/recipeImages";
 import {
   createRecommendation,
   getCurrentUserId,
@@ -20,11 +21,6 @@ import {
 
 const FALLBACK_IMAGE =
   "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80";
-
-function fallbackImageByTitle(title) {
-  const slug = encodeURIComponent((title || "recipe").trim().toLowerCase().replace(/\s+/g, "-"));
-  return `https://picsum.photos/seed/smartdiet-${slug}/800/450`;
-}
 
 function toRecipeCard(bundle) {
   const nutrition = bundle?.meal_plan?.nutrition_summary || {};
@@ -40,7 +36,7 @@ function toRecipeCard(bundle) {
     title,
     kcal: String(nutrition.calories || 0),
     time: `${totalMinutes}m`,
-    imageUrl: thumbnailUrl || fallbackImageByTitle(title) || FALLBACK_IMAGE,
+    imageUrl: thumbnailUrl || getRecipeFallbackImage(title) || FALLBACK_IMAGE,
   };
 }
 

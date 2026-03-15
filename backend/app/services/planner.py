@@ -362,34 +362,36 @@ def resolve_recipe_metadata_for_title(
     constraints: ConstraintSet | None = None,
 ) -> dict[str, Any]:
     """Resolve best-effort MealDB metadata for an AI-generated recipe title."""
+    try:
+        normalized_target = _normalize_recipe_title(recipe_title)
+        candidates = retrieve_recipe_candidates(inventory, constraints=constraints, limit=8)
 
-    normalized_target = _normalize_recipe_title(recipe_title)
-    candidates = retrieve_recipe_candidates(inventory, constraints=constraints, limit=8)
+        best_candidate = None
+        best_score = 0
+        if normalized_target:
+            for candidate in candidates:
+                score = _recipe_title_similarity(
+                    normalized_target,
+                    _normalize_recipe_title(candidate.get("recipe_title")),
+                )
+                if score > best_score:
+                    best_score = score
+                    best_candidate = candidate
 
-    best_candidate = None
-    best_score = 0
-    if normalized_target:
-        for candidate in candidates:
-            score = _recipe_title_similarity(
-                normalized_target,
-                _normalize_recipe_title(candidate.get("recipe_title")),
-            )
-            if score > best_score:
-                best_score = score
-                best_candidate = candidate
+        if best_candidate and best_score >= 35:
+            return extract_recipe_metadata(best_candidate)
 
-    if best_candidate and best_score >= 35:
-        return extract_recipe_metadata(best_candidate)
+        if recipe_title and settings.recipe_api_base_url:
+            payload = _request_json("search.php", {"s": recipe_title.strip()})
+            meals = (payload or {}).get("meals") or []
+            if meals:
+                return extract_recipe_metadata(_parse_meal_detail(meals[0]))
 
-    if recipe_title and settings.recipe_api_base_url:
-        payload = _request_json("search.php", {"s": recipe_title.strip()})
-        meals = (payload or {}).get("meals") or []
-        if meals:
-            return extract_recipe_metadata(_parse_meal_detail(meals[0]))
+        if candidates:
+            seed = normalized_target or (recipe_title or "fallback-meal")
+            chosen = candidates[_stable_recipe_index(seed, len(candidates))]
+            return extract_recipe_metadata(chosen)
 
-    if candidates:
-        seed = normalized_target or (recipe_title or "fallback-meal")
-        chosen = candidates[_stable_recipe_index(seed, len(candidates))]
-        return extract_recipe_metadata(chosen)
-
-    return {}
+        return {}
+    except Exception:
+        return {}
