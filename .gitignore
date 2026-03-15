@@ -24,3 +24,7 @@ node_modules/
 *.db
 coverage.xml
 htmlcov/
+.run/
+.pytest_cache/
+.vercel
+.env*.local

@@ -33,7 +33,7 @@ export default function Footer() {
             Contact
           </a>
         </div>
-        <p className="text-slate-400 text-sm">© 2024 Agentic Personal Dietitian.</p>
+        <p className="text-slate-400 text-sm">© 2026 SmartDiet Copilot.</p>
       </div>
     </footer>
   );

@@ -1,1 +1,1 @@
-"""Application package for Eco-Health Agentic Dietitian backend."""
+"""Application package for SmartDiet Copilot backend."""

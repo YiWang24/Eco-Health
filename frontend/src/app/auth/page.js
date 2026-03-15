@@ -163,7 +163,7 @@ export default function AuthPage() {
               Code sent to <span className="font-semibold">{email}</span>
             </p>
             <label className="block space-y-1.5">
-              <span className="text-sm font-semibold text-slate-700">6-digit code</span>
+              <span className="text-sm font-semibold text-slate-700">8-digit code</span>
               <input
                 type="text"
                 value={code}

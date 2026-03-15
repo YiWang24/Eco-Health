@@ -45,7 +45,7 @@ export default function OnboardingLayout({ children }) {
         </main>
         <footer className="py-10 border-t border-primary/5 text-center">
           <p className="text-slate-400 text-sm">
-            © 2024 SmartDiet Copilot. All rights reserved.
+            © 2026 SmartDiet Copilot. All rights reserved.
           </p>
         </footer>
       </div>
