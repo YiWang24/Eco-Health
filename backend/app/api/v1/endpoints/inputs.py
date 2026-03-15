@@ -8,7 +8,7 @@ import re
 from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -255,6 +255,15 @@ async def get_pantry(
     )
     deduped_rows = _dedupe_pantry_items(items)
     return [PantryItemResponse(**row) for row in deduped_rows]
+
+
+@router.delete("/pantry", status_code=status.HTTP_204_NO_CONTENT)
+async def clear_pantry(
+    current_user: AuthContext = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    db.execute(delete(PantryItem).where(PantryItem.user_id == current_user.user_id))
+    db.commit()
 
 
 @router.delete("/pantry/{item_id}", status_code=status.HTTP_204_NO_CONTENT)

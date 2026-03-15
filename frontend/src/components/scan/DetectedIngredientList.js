@@ -1,83 +1,103 @@
 import Icon from "@/components/ui/Icon";
 
-/**
- * 右侧「检测到的食材」列表，前端根据后端数据渲染。
- * 每条：图标、名称、状态文案（过期/仅剩/新鲜等），用颜色区分状态。
- *
- * @param {Array<{ id: string, name: string, icon: string, status: 'fresh'|'expiring_soon'|'critical', statusText: string }>} items
- * @param {number} newCount - “X New Found” 徽章数字，可选
- */
-export default function DetectedIngredientList({ items = [], newCount }) {
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "critical":
-        return "text-red-600 dark:text-red-400";
-      case "expiring_soon":
-        return "text-orange-600 dark:text-orange-400";
-      case "do_not_eat":
-        return "text-slate-500 dark:text-slate-500";
-      default:
-        return "text-slate-600 dark:text-slate-400";
-    }
-  };
+const STATUS_COLORS = {
+  critical: { text: "text-red-600", icon: "text-red-500", badge: "bg-red-100 text-red-700" },
+  expiring_soon: { text: "text-orange-600", icon: "text-orange-500", badge: "bg-orange-100 text-orange-700" },
+  fresh: { text: "text-slate-500", icon: "text-primary", badge: "" },
+};
 
-  const getIconColor = (status) => {
-    switch (status) {
-      case "critical":
-        return "text-red-500";
-      case "expiring_soon":
-        return "text-orange-500";
-      case "do_not_eat":
-        return "text-slate-500 dark:text-slate-500";
-      default:
-        return "text-primary";
-    }
-  };
+function getColors(status) {
+  return STATUS_COLORS[status] || STATUS_COLORS.fresh;
+}
+
+export default function DetectedIngredientList({
+  items = [],
+  newCount,
+  deletingIds = new Set(),
+  clearingAll = false,
+  onDelete,
+  onClearAll,
+}) {
+  const hasItems = items.length > 0;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-bold">Detected Ingredients</h3>
-        {newCount != null && newCount > 0 && (
-          <span className="bg-primary/20 text-primary text-xs font-bold px-2 py-1 rounded-full">
-            {newCount} New Found
-          </span>
+        <div className="flex items-center gap-2">
+          <h3 className="text-lg font-bold">Pantry</h3>
+          {newCount != null && newCount > 0 && (
+            <span className="bg-primary/20 text-primary text-xs font-bold px-2 py-1 rounded-full">
+              +{newCount} new
+            </span>
+          )}
+          {hasItems && (
+            <span className="text-xs text-slate-400 font-medium">{items.length} items</span>
+          )}
+        </div>
+        {hasItems && onClearAll && (
+          <button
+            type="button"
+            onClick={onClearAll}
+            disabled={clearingAll}
+            className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-red-500 hover:bg-red-50 disabled:opacity-50 transition-colors"
+          >
+            {clearingAll ? (
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-red-300 border-t-red-500" />
+            ) : (
+              <Icon name="delete_sweep" className="text-sm" />
+            )}
+            Clear All
+          </button>
         )}
       </div>
-      <ul className="space-y-2">
-        {items.map(({ id, name, icon, status, statusText }) => (
-          <li
-            key={id}
-            className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700"
-          >
-            <span className={getIconColor(status)}>
-              <Icon name={icon || "eco"} className="text-2xl" />
-            </span>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">
-                {name}
-              </p>
-              <p className={`text-xs font-medium ${getStatusColor(status)}`}>
-                {status && status !== "fresh" ? "▲ " : ""}
-                {statusText}
-              </p>
-            </div>
-            <button
-              type="button"
-              className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-              aria-label="More options"
-            >
-              <Icon name="more_vert" className="text-lg" />
-            </button>
-          </li>
-        ))}
-      </ul>
-      <button
-        type="button"
-        className="w-full py-3 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 text-sm font-medium hover:border-primary hover:text-primary transition-colors"
-      >
-        + Add Ingredient Manually
-      </button>
+
+      {!hasItems ? (
+        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 py-8 text-center text-sm text-slate-400">
+          <Icon name="kitchen" className="text-3xl mb-2 block" />
+          No ingredients yet — scan your fridge to populate
+        </div>
+      ) : (
+        <ul className="space-y-2 max-h-[420px] overflow-y-auto pr-0.5">
+          {items.map(({ id, name, icon, status, statusText }) => {
+            const colors = getColors(status);
+            const isDeleting = deletingIds.has(id);
+
+            return (
+              <li
+                key={id}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white border border-slate-100 transition-opacity ${isDeleting ? "opacity-40 pointer-events-none" : ""}`}
+              >
+                <span className={colors.icon}>
+                  <Icon name={icon || "eco"} className="text-xl" />
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-slate-900 truncate text-sm">{name}</p>
+                  {statusText && (
+                    <p className={`text-xs font-medium ${colors.text}`}>
+                      {status !== "fresh" && "▲ "}{statusText}
+                    </p>
+                  )}
+                </div>
+                {onDelete && (
+                  <button
+                    type="button"
+                    onClick={() => onDelete(id)}
+                    disabled={isDeleting}
+                    aria-label={`Remove ${name}`}
+                    className="shrink-0 p-1.5 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 transition-colors"
+                  >
+                    {isDeleting ? (
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-red-400 block" />
+                    ) : (
+                      <Icon name="close" className="text-base" />
+                    )}
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }

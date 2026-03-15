@@ -295,6 +295,10 @@ export function deletePantryItem(itemId) {
   return request(`/inputs/pantry/${itemId}`, { method: "DELETE" });
 }
 
+export function clearPantry() {
+  return request("/inputs/pantry", { method: "DELETE" });
+}
+
 export function sendChatMessage(message, { autoReplan = true } = {}) {
   const query = autoReplan ? "?auto_replan=true" : "?auto_replan=false";
   return request(`/inputs/chat-message${query}`, { method: "POST", body: { message } });

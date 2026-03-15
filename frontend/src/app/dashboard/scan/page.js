@@ -7,7 +7,9 @@ import DetectedIngredientList from "@/components/scan/DetectedIngredientList";
 import FreshnessLegend from "@/components/scan/FreshnessLegend";
 import Icon from "@/components/ui/Icon";
 import {
+  clearPantry,
   createRecommendation,
+  deletePantryItem,
   getCurrentUserId,
   getPantry,
   getSpoilageAlerts,
@@ -183,6 +185,8 @@ export default function UnifiedScanPage() {
   const [scanningMeal, setScanningMeal] = useState(false);
   const [scanningReceipt, setScanningReceipt] = useState(false);
   const [generatingRecipe, setGeneratingRecipe] = useState(false);
+  const [deletingIds, setDeletingIds] = useState(new Set());
+  const [clearingAll, setClearingAll] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -327,6 +331,40 @@ export default function UnifiedScanPage() {
     }
   }
 
+  async function handleDeleteItem(itemId) {
+    if (deletingIds.has(itemId)) return;
+    setDeletingIds((prev) => new Set([...prev, itemId]));
+    setError("");
+    try {
+      await deletePantryItem(itemId);
+      setPantry((prev) => prev.filter((item) => String(item.item_id || item.ingredient) !== String(itemId)));
+    } catch (err) {
+      setError(err.message || "Failed to delete ingredient");
+    } finally {
+      setDeletingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(itemId);
+        return next;
+      });
+    }
+  }
+
+  async function handleClearAll() {
+    if (clearingAll || pantry.length === 0) return;
+    setClearingAll(true);
+    setError("");
+    try {
+      await clearPantry();
+      setPantry([]);
+      setAlerts([]);
+      setNotice("All pantry items cleared.");
+    } catch (err) {
+      setError(err.message || "Failed to clear pantry");
+    } finally {
+      setClearingAll(false);
+    }
+  }
+
   async function handleGenerateRecipe() {
     if (generatingRecipe) return;
     setGeneratingRecipe(true);
@@ -423,7 +461,13 @@ export default function UnifiedScanPage() {
                   Loading pantry...
                 </div>
               ) : (
-                <DetectedIngredientList items={detectedItems} />
+                <DetectedIngredientList
+                  items={detectedItems}
+                  deletingIds={deletingIds}
+                  clearingAll={clearingAll}
+                  onDelete={handleDeleteItem}
+                  onClearAll={handleClearAll}
+                />
               )}
             </aside>
           </>
