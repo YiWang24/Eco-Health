@@ -52,6 +52,48 @@ body {
   }
 }
 
+@keyframes authAmbientDrift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(12px, -14px, 0) scale(1.04);
+  }
+}
+
+@keyframes authOrbitLeft {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+  }
+  25% {
+    transform: translate3d(18px, -22px, 0) rotate(5deg) scale(1.06);
+  }
+  50% {
+    transform: translate3d(34px, 8px, 0) rotate(10deg) scale(0.97);
+  }
+  75% {
+    transform: translate3d(10px, 26px, 0) rotate(4deg) scale(1.03);
+  }
+}
+
+@keyframes authOrbitRight {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+  }
+  20% {
+    transform: translate3d(-16px, -18px, 0) rotate(-6deg) scale(1.05);
+  }
+  45% {
+    transform: translate3d(-30px, 10px, 0) rotate(-11deg) scale(0.96);
+  }
+  70% {
+    transform: translate3d(-8px, 28px, 0) rotate(-4deg) scale(1.02);
+  }
+}
+
 .hero-reveal {
   opacity: 0;
   animation: heroFadeUp 0.7s cubic-bezier(0.2, 0.65, 0.2, 1) forwards;
@@ -97,6 +139,24 @@ body {
   animation: heroFadeUp 0.8s cubic-bezier(0.2, 0.65, 0.2, 1) forwards, heroFloat 6.4s ease-in-out infinite;
 }
 
+.auth-ambient-drift {
+  animation: authAmbientDrift 14s ease-in-out infinite;
+}
+
+.auth-ambient-drift-slow {
+  animation: authAmbientDrift 19s ease-in-out infinite reverse;
+}
+
+.auth-orbit-left {
+  animation: authOrbitLeft 10s ease-in-out infinite;
+  will-change: transform;
+}
+
+.auth-orbit-right {
+  animation: authOrbitRight 11.5s ease-in-out infinite;
+  will-change: transform;
+}
+
 /* 可访问性：键盘焦点可见，点击不额外显示轮廓 */
 *:focus {
   outline: none;
@@ -109,7 +169,11 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .hero-reveal,
   .hero-gradient-text,
-  .hero-float-slow {
+  .hero-float-slow,
+  .auth-ambient-drift,
+  .auth-ambient-drift-slow,
+  .auth-orbit-left,
+  .auth-orbit-right {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
