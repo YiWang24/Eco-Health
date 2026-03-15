@@ -88,6 +88,14 @@ export default function ProfilePage() {
               <p className="font-semibold">{profile?.age ?? "-"}</p>
             </div>
             <div>
+              <p className="text-slate-500">Sex at Birth</p>
+              <p className="font-semibold">
+                {profile?.biological_sex
+                  ? profile.biological_sex.charAt(0).toUpperCase() + profile.biological_sex.slice(1)
+                  : "-"}
+              </p>
+            </div>
+            <div>
               <p className="text-slate-500">Activity</p>
               <p className="font-semibold">{profile?.activity_level || "-"}</p>
             </div>

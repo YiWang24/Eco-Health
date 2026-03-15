@@ -30,6 +30,7 @@ async def get_profile(
     return ProfileResponse(
         user_id=profile.user_id,
         age=profile.age,
+        biological_sex=profile.biological_sex,
         height_cm=profile.height_cm,
         weight_kg=profile.weight_kg,
         activity_level=profile.activity_level,
@@ -55,6 +56,7 @@ async def upsert_profile(
         profile = Profile(user_id=user_id)
 
     profile.age = payload.age
+    profile.biological_sex = payload.biological_sex
     profile.height_cm = payload.height_cm
     profile.weight_kg = payload.weight_kg
     profile.activity_level = payload.activity_level
@@ -69,6 +71,7 @@ async def upsert_profile(
     return ProfileResponse(
         user_id=profile.user_id,
         age=profile.age,
+        biological_sex=profile.biological_sex,
         height_cm=profile.height_cm,
         weight_kg=profile.weight_kg,
         activity_level=profile.activity_level,

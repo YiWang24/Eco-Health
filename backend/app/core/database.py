@@ -87,6 +87,24 @@ def _engine_sqlite_connection():
     return raw, conn
 
 
+def _ensure_sqlite_column(table_name: str, column_name: str, ddl: str) -> None:
+    """Apply lightweight SQLite schema evolution for hackathon runtime tables."""
+
+    if not IS_SQLITE:
+        return
+
+    raw, conn = _engine_sqlite_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(f"PRAGMA table_info({table_name})")
+        existing_columns = {row[1] for row in cursor.fetchall()}
+        if column_name not in existing_columns:
+            cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {ddl}")
+            conn.commit()
+    finally:
+        raw.close()
+
+
 def restore_sqlite_snapshot() -> None:
     """Restore file snapshot into in-memory sqlite runtime."""
 
@@ -161,4 +179,5 @@ def init_db() -> None:
 
     restore_sqlite_snapshot()
     Base.metadata.create_all(bind=engine)
+    _ensure_sqlite_column("profiles", "biological_sex", "biological_sex VARCHAR(32)")
     persist_sqlite_snapshot()

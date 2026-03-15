@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 class ProfileUpsert(BaseModel):
     age: int | None = None
+    biological_sex: str | None = None
     height_cm: float | None = None
     weight_kg: float | None = None
     activity_level: str | None = None

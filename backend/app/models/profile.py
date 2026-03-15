@@ -14,6 +14,7 @@ class Profile(Base):
     __tablename__ = "profiles"
 
     user_id: Mapped[str] = mapped_column(String(128), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    biological_sex: Mapped[str | None] = mapped_column(String(32), nullable=True)
     age: Mapped[int | None] = mapped_column(Integer, nullable=True)
     height_cm: Mapped[float | None] = mapped_column(Float, nullable=True)
     weight_kg: Mapped[float | None] = mapped_column(Float, nullable=True)

@@ -9,11 +9,13 @@ import SmartSuggestion from "@/components/dashboard/SmartSuggestion";
 import RecipeCard from "@/components/dashboard/RecipeCard";
 import EmptyState from "@/components/ui/EmptyState";
 import { ROUTES } from "@/lib/constants";
+import { calculateNutritionTargets, inferGoalType } from "@/lib/nutrition-targets.mjs";
 import { getRecipeFallbackImage } from "@/utils/recipeImages";
 import {
   createRecommendation,
   getCurrentUserId,
   getGoals,
+  getProfile,
   getRecommendationHistory,
   getSpoilageAlerts,
   getTodayNutrition,
@@ -45,6 +47,7 @@ export default function DashboardPage() {
   const userId = getCurrentUserId();
   const [history, setHistory] = useState([]);
   const [goals, setGoals] = useState(null);
+  const [profile, setProfile] = useState(null);
   const [alerts, setAlerts] = useState([]);
   const [todayNutrition, setTodayNutrition] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -57,15 +60,17 @@ export default function DashboardPage() {
       setLoading(true);
       setError("");
       try {
-        const [historyRes, goalsRes, alertsRes, todayNutritionRes] = await Promise.all([
+        const [historyRes, goalsRes, profileRes, alertsRes, todayNutritionRes] = await Promise.all([
           getRecommendationHistory(userId, 8).catch(() => []),
           getGoals(userId).catch(() => null),
+          getProfile(userId).catch(() => null),
           getSpoilageAlerts().catch(() => []),
           getTodayNutrition().catch(() => null),
         ]);
         if (!active) return;
         setHistory(Array.isArray(historyRes) ? historyRes : []);
         setGoals(goalsRes);
+        setProfile(profileRes);
         setAlerts(Array.isArray(alertsRes) ? alertsRes : []);
         setTodayNutrition(todayNutritionRes);
       } catch (err) {
@@ -105,6 +110,24 @@ export default function DashboardPage() {
   const latest = history[0] || null;
   const cards = useMemo(() => history.map(toRecipeCard), [history]);
   const hasTodayMealData = Number(todayNutrition?.meal_count || 0) > 0;
+  const goalType = inferGoalType(
+    { caloriesTarget: goals?.calories_target },
+    {
+      age: profile?.age,
+      heightCm: profile?.height_cm,
+      weightKg: profile?.weight_kg,
+      biologicalSex: profile?.biological_sex,
+      activityLevel: profile?.activity_level,
+    },
+  );
+  const targetReference = calculateNutritionTargets({
+    age: profile?.age,
+    heightCm: profile?.height_cm,
+    weightKg: profile?.weight_kg,
+    biologicalSex: profile?.biological_sex,
+    activityLevel: profile?.activity_level,
+    goalType,
+  });
 
   const currentCalories = hasTodayMealData
     ? todayNutrition.calories || 0
@@ -112,6 +135,13 @@ export default function DashboardPage() {
   const targetCalories = goals?.calories_target || Math.max(2000, currentCalories || 0);
   const caloriePercent =
     targetCalories > 0 ? Math.min(100, Math.round((currentCalories / targetCalories) * 100)) : 0;
+
+  const maintenanceCalories = targetReference.ready ? targetReference.maintenanceCalories : targetCalories;
+  const adjustmentLabel = targetReference.ready
+    ? targetReference.calorieDelta === 0
+      ? "Goal adjustment 0 kcal"
+      : `Goal adjustment ${targetReference.calorieDelta > 0 ? "+" : ""}${targetReference.calorieDelta} kcal`
+    : "Goal adjustment unavailable";
 
   const proteinCurrent = hasTodayMealData
     ? todayNutrition.protein_g || 0
@@ -126,7 +156,10 @@ export default function DashboardPage() {
   const macros = [
     {
       name: "Protein",
-      value: `${proteinCurrent}g`,
+      value:
+        goals?.protein_g_target > 0
+          ? `${proteinCurrent} / ${goals.protein_g_target}g`
+          : `${proteinCurrent}g`,
       color: "bg-blue-500",
       width:
         goals?.protein_g_target > 0
@@ -135,7 +168,10 @@ export default function DashboardPage() {
     },
     {
       name: "Carbs",
-      value: `${carbsCurrent}g`,
+      value:
+        goals?.carbs_g_target > 0
+          ? `${carbsCurrent} / ${goals.carbs_g_target}g`
+          : `${carbsCurrent}g`,
       color: "bg-amber-500",
       width:
         goals?.carbs_g_target > 0
@@ -144,7 +180,10 @@ export default function DashboardPage() {
     },
     {
       name: "Fats",
-      value: `${fatsCurrent}g`,
+      value:
+        goals?.fat_g_target > 0
+          ? `${fatsCurrent} / ${goals.fat_g_target}g`
+          : `${fatsCurrent}g`,
       color: "bg-rose-500",
       width:
         goals?.fat_g_target > 0
@@ -158,7 +197,13 @@ export default function DashboardPage() {
       <section className="flex flex-col gap-2">
         <h2 className="text-2xl font-black tracking-tight">Today&apos;s Nutrition</h2>
         <NutritionCard
-          calories={{ current: currentCalories, target: targetCalories, percent: caloriePercent }}
+          calories={{
+            current: currentCalories,
+            target: targetCalories,
+            percent: caloriePercent,
+            maintenance: maintenanceCalories,
+            adjustmentLabel,
+          }}
           macros={macros}
         />
       </section>
