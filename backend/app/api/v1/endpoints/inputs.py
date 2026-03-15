@@ -37,6 +37,51 @@ from app.services.user_context import ensure_user
 router = APIRouter(prefix="/inputs", tags=["inputs"])
 
 
+def _normalize_ingredient_name(value: str | None) -> str:
+    return " ".join((value or "").strip().lower().split())
+
+
+def _dedupe_pantry_items(items: list[PantryItem]) -> list[dict]:
+    merged: dict[str, dict] = {}
+
+    for item in items:
+        key = _normalize_ingredient_name(item.ingredient)
+        if not key:
+            continue
+
+        current = merged.get(key)
+        if current is None:
+            merged[key] = {
+                "item_id": item.id,
+                "ingredient": key,
+                "quantity": item.quantity,
+                "expires_in_days": item.expires_in_days,
+                "source": item.source,
+                "updated_at": item.updated_at,
+            }
+            continue
+
+        if not current["quantity"] and item.quantity:
+            current["quantity"] = item.quantity
+        if item.expires_in_days is not None and (
+            current["expires_in_days"] is None or item.expires_in_days < current["expires_in_days"]
+        ):
+            current["expires_in_days"] = item.expires_in_days
+        if item.updated_at and item.updated_at > current["updated_at"]:
+            current["item_id"] = item.id
+            current["source"] = item.source
+            current["updated_at"] = item.updated_at
+
+    return sorted(
+        merged.values(),
+        key=lambda row: (
+            row["expires_in_days"] is None,
+            row["expires_in_days"] if row["expires_in_days"] is not None else 9999,
+            row["ingredient"],
+        ),
+    )
+
+
 def _create_input_job(
     *,
     db: Session,
@@ -135,17 +180,8 @@ async def get_pantry(
         .scalars()
         .all()
     )
-    return [
-        PantryItemResponse(
-            item_id=item.id,
-            ingredient=item.ingredient,
-            quantity=item.quantity,
-            expires_in_days=item.expires_in_days,
-            source=item.source,
-            updated_at=item.updated_at,
-        )
-        for item in items
-    ]
+    deduped_rows = _dedupe_pantry_items(items)
+    return [PantryItemResponse(**row) for row in deduped_rows]
 
 
 @router.delete("/pantry/{item_id}", status_code=status.HTTP_204_NO_CONTENT)

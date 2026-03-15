@@ -55,9 +55,62 @@ function iconForIngredient(name) {
   return "eco";
 }
 
+function normalizeIngredientName(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function dedupePantryItems(items) {
+  const byIngredient = new Map();
+
+  for (const row of Array.isArray(items) ? items : []) {
+    const key = normalizeIngredientName(row?.ingredient);
+    if (!key) continue;
+
+    const current = byIngredient.get(key);
+    if (!current) {
+      byIngredient.set(key, { ...row, ingredient: key });
+      continue;
+    }
+
+    const merged = { ...current };
+    if (!merged.quantity && row.quantity) {
+      merged.quantity = row.quantity;
+    }
+
+    if (row.expires_in_days != null) {
+      if (merged.expires_in_days == null || row.expires_in_days < merged.expires_in_days) {
+        merged.expires_in_days = row.expires_in_days;
+      }
+    }
+
+    const currentUpdated = Date.parse(current.updated_at || "") || 0;
+    const rowUpdated = Date.parse(row.updated_at || "") || 0;
+    if (rowUpdated > currentUpdated) {
+      merged.updated_at = row.updated_at;
+      merged.source = row.source || merged.source;
+      merged.item_id = row.item_id;
+    }
+
+    byIngredient.set(key, merged);
+  }
+
+  return Array.from(byIngredient.values()).sort((a, b) => {
+    const aDays = a.expires_in_days;
+    const bDays = b.expires_in_days;
+    if (aDays == null && bDays == null) return a.ingredient.localeCompare(b.ingredient);
+    if (aDays == null) return 1;
+    if (bDays == null) return -1;
+    if (aDays !== bDays) return aDays - bDays;
+    return a.ingredient.localeCompare(b.ingredient);
+  });
+}
+
 function toDetectedItems(items) {
   return items.map((item) => ({
-    id: String(item.item_id),
+    id: String(item.item_id || item.ingredient),
     name: item.ingredient,
     icon: iconForIngredient(item.ingredient),
     status: statusFromDays(item.expires_in_days),
@@ -110,7 +163,6 @@ function ActionButton({ disabled, busy, idleText, busyText, onClick }) {
 
 export default function UnifiedScanPage() {
   const router = useRouter();
-  const userId = getCurrentUserId();
 
   const fridgeFileRef = useRef(null);
   const mealFileRef = useRef(null);
@@ -129,6 +181,7 @@ export default function UnifiedScanPage() {
   const [scanningFridge, setScanningFridge] = useState(false);
   const [scanningMeal, setScanningMeal] = useState(false);
   const [scanningReceipt, setScanningReceipt] = useState(false);
+  const [generatingRecipe, setGeneratingRecipe] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -143,7 +196,7 @@ export default function UnifiedScanPage() {
       getPantry().catch(() => []),
       getSpoilageAlerts().catch(() => []),
     ]);
-    const pantryRows = Array.isArray(pantryRes) ? pantryRes : [];
+    const pantryRows = dedupePantryItems(Array.isArray(pantryRes) ? pantryRes : []);
     setPantry(pantryRows);
     setAlerts(Array.isArray(alertsRes) ? alertsRes : []);
     setReceiptItems(pantryRows.filter((item) => item.source === "receipt_scan"));
@@ -265,11 +318,22 @@ export default function UnifiedScanPage() {
   }
 
   async function handleGenerateRecipe() {
+    if (generatingRecipe) return;
+    setGeneratingRecipe(true);
+    setError("");
+    setNotice("");
     try {
-      const rec = await createRecommendation({ user_id: userId, constraints: {} });
+      const requestUserId = getCurrentUserId();
+      const rec = await createRecommendation({ user_id: requestUserId, constraints: {} });
+      if (!rec?.recommendation_id) {
+        throw new Error("Recipe generated, but recommendation id is missing");
+      }
+      setNotice("Recipe generated. Redirecting to details...");
       router.push(`/dashboard/recipes/${rec.recommendation_id}`);
     } catch (err) {
       setError(err.message || "Failed to generate recipe");
+    } finally {
+      setGeneratingRecipe(false);
     }
   }
 
@@ -337,9 +401,10 @@ export default function UnifiedScanPage() {
               <button
                 type="button"
                 onClick={handleGenerateRecipe}
-                className="self-start bg-primary text-white px-4 py-2 rounded-xl text-sm font-bold"
+                disabled={generatingRecipe}
+                className="self-start bg-primary text-white px-4 py-2 rounded-xl text-sm font-bold disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Generate Recipes Now
+                {generatingRecipe ? "Generating..." : "Generate Recipes Now"}
               </button>
             </section>
             <aside className="lg:col-span-5">

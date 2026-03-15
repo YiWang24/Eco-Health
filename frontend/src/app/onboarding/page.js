@@ -20,8 +20,32 @@ const GOAL_TEMPLATES = {
   maintenance: { calories_target: 2100, protein_g_target: 130, carbs_g_target: 220, fat_g_target: 65 },
 };
 
-const DIET_OPTIONS = ["vegetarian", "vegan", "keto", "paleo"];
-const ALLERGY_OPTIONS = ["dairy", "gluten", "nuts", "shellfish"];
+const DIET_OPTIONS = [
+  { value: "no_specific_diet", label: "No specific diet" },
+  { value: "vegetarian", label: "Vegetarian" },
+  { value: "vegan", label: "Vegan" },
+  { value: "pescatarian", label: "Pescatarian" },
+  { value: "halal", label: "Halal" },
+  { value: "kosher", label: "Kosher" },
+  { value: "gluten_free", label: "Gluten-free" },
+  { value: "dairy_free", label: "Dairy-free" },
+  { value: "low_sodium", label: "Low sodium" },
+  { value: "mediterranean", label: "Mediterranean" },
+];
+
+const ALLERGY_OPTIONS = [
+  { value: "peanut", label: "Peanut" },
+  { value: "tree_nut", label: "Tree nut" },
+  { value: "milk", label: "Milk" },
+  { value: "egg", label: "Egg" },
+  { value: "fish", label: "Fish" },
+  { value: "shellfish", label: "Shellfish" },
+  { value: "sesame", label: "Sesame" },
+  { value: "soy", label: "Soy" },
+  { value: "wheat", label: "Wheat/Gluten" },
+  { value: "mustard", label: "Mustard" },
+  { value: "sulphites", label: "Sulphites" },
+];
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -167,7 +191,7 @@ export default function OnboardingPage() {
 
   return (
     <div className="layout-content-container flex flex-col max-w-4xl w-full">
-      <ProgressStepper step={1} totalSteps={4} />
+      <ProgressStepper step={1} totalSteps={2} labels={["Fill Form", "Complete"]} />
 
       <form
         onSubmit={handleSubmit}
@@ -261,15 +285,15 @@ export default function OnboardingPage() {
                 {DIET_OPTIONS.map((item) => (
                   <button
                     type="button"
-                    key={item}
-                    onClick={() => toggleInList("dietary_preferences", item)}
+                    key={item.value}
+                    onClick={() => toggleInList("dietary_preferences", item.value)}
                     className={`px-3 py-1.5 rounded-full border text-sm ${
-                      form.dietary_preferences.includes(item)
+                      form.dietary_preferences.includes(item.value)
                         ? "bg-primary text-white border-primary"
                         : "border-slate-200 hover:border-primary/50"
                     }`}
                   >
-                    {item}
+                    {item.label}
                   </button>
                 ))}
               </div>
@@ -280,15 +304,15 @@ export default function OnboardingPage() {
                 {ALLERGY_OPTIONS.map((item) => (
                   <button
                     type="button"
-                    key={item}
-                    onClick={() => toggleInList("allergies", item)}
+                    key={item.value}
+                    onClick={() => toggleInList("allergies", item.value)}
                     className={`px-3 py-1.5 rounded-full border text-sm ${
-                      form.allergies.includes(item)
+                      form.allergies.includes(item.value)
                         ? "bg-red-500 text-white border-red-500"
                         : "border-slate-200 hover:border-red-300"
                     }`}
                   >
-                    {item}
+                    {item.label}
                   </button>
                 ))}
               </div>

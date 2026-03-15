@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.agents.tools import analyze_fridge_vision, analyze_meal_vision, parse_receipt_items
 from app.core.database import SessionLocal
@@ -10,6 +10,10 @@ from app.models.input_job import InputJob
 from app.models.meal_log import MealLog
 from app.models.pantry_item import PantryItem
 from app.models.receipt_event import ReceiptEvent
+
+
+def _normalize_ingredient_name(value: str | None) -> str:
+    return " ".join((value or "").strip().lower().split())
 
 
 def _upsert_pantry_item(
@@ -21,11 +25,21 @@ def _upsert_pantry_item(
     expires_in_days: int | None,
     source: str,
 ) -> None:
+    normalized = _normalize_ingredient_name(ingredient)
+    if not normalized:
+        return
+
     existing = db.execute(
-        select(PantryItem).where(PantryItem.user_id == user_id, PantryItem.ingredient == ingredient.lower())
-    ).scalar_one_or_none()
+        select(PantryItem)
+        .where(
+            PantryItem.user_id == user_id,
+            func.lower(func.trim(PantryItem.ingredient)) == normalized,
+        )
+        .order_by(PantryItem.updated_at.desc(), PantryItem.id.desc())
+    ).scalars().first()
 
     if existing:
+        existing.ingredient = normalized
         existing.quantity = quantity or existing.quantity
         existing.expires_in_days = expires_in_days if expires_in_days is not None else existing.expires_in_days
         existing.source = source
@@ -35,12 +49,50 @@ def _upsert_pantry_item(
     db.add(
         PantryItem(
             user_id=user_id,
-            ingredient=ingredient.lower(),
+            ingredient=normalized,
             quantity=quantity,
             expires_in_days=expires_in_days,
             source=source,
         )
     )
+
+
+def _dedupe_user_pantry_items(db, user_id: str) -> None:
+    rows = (
+        db.execute(
+            select(PantryItem)
+            .where(PantryItem.user_id == user_id)
+            .order_by(PantryItem.updated_at.desc(), PantryItem.id.desc())
+        )
+        .scalars()
+        .all()
+    )
+
+    grouped: dict[str, PantryItem] = {}
+    for row in rows:
+        key = _normalize_ingredient_name(row.ingredient)
+        if not key:
+            db.delete(row)
+            continue
+
+        current = grouped.get(key)
+        if current is None:
+            row.ingredient = key
+            grouped[key] = row
+            db.add(row)
+            continue
+
+        if not current.quantity and row.quantity:
+            current.quantity = row.quantity
+        if row.expires_in_days is not None and (
+            current.expires_in_days is None or row.expires_in_days < current.expires_in_days
+        ):
+            current.expires_in_days = row.expires_in_days
+        if current.source == "unknown" and row.source:
+            current.source = row.source
+
+        db.add(current)
+        db.delete(row)
 
 
 def process_input_job(job_id: str) -> None:
@@ -72,6 +124,7 @@ def process_input_job(job_id: str) -> None:
                     expires_in_days=item.get("expires_in_days"),
                     source="fridge_scan",
                 )
+            _dedupe_user_pantry_items(db, job.user_id)
             result["updated_items"] = len(items)
 
         elif job.input_type == "meal_scan":
@@ -117,6 +170,7 @@ def process_input_job(job_id: str) -> None:
                     expires_in_days=item.get("expires_in_days"),
                     source="receipt_scan",
                 )
+            _dedupe_user_pantry_items(db, job.user_id)
             result["receipt_event_created"] = True
             result["updated_items"] = len(items)
 
