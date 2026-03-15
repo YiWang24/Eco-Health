@@ -1,5 +1,7 @@
 """FastAPI application entrypoint."""
 
+from __future__ import annotations
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -11,9 +13,19 @@ settings = get_settings()
 
 app = FastAPI(title=settings.app_name, version="0.1.0")
 
+
+def _parse_cors_origins(raw: str) -> list[str]:
+    """Parse comma separated CORS origins from environment configuration."""
+
+    origins = [item.strip() for item in raw.split(",") if item.strip()]
+    if not origins:
+        return ["http://localhost:3000"]
+    return origins
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_parse_cors_origins(settings.cors_allowed_origins),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -1,0 +1,88 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy-backend.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          BACKEND_ENV_B64: ${{ secrets.BACKEND_ENV_B64 }}
+          EC2_APP_DIR: ${{ secrets.EC2_APP_DIR }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          script_stop: true
+          envs: GITHUB_REPOSITORY,BACKEND_ENV_B64,EC2_APP_DIR
+          script: |
+            set -euo pipefail
+
+            APP_DIR="${EC2_APP_DIR:-/home/ubuntu/apps/eco-health}"
+            BRANCH="main"
+            REPO_URL="https://github.com/${GITHUB_REPOSITORY}.git"
+
+            sudo apt-get update -y
+            sudo apt-get install -y python3-venv python3-pip
+
+            mkdir -p "$(dirname "$APP_DIR")"
+            if [ ! -d "$APP_DIR/.git" ]; then
+              git clone --branch "$BRANCH" "$REPO_URL" "$APP_DIR"
+            fi
+
+            cd "$APP_DIR"
+            git fetch origin "$BRANCH"
+            git checkout "$BRANCH"
+            git pull --ff-only origin "$BRANCH"
+
+            python3 -m venv .venv
+            . .venv/bin/activate
+            python -m pip install --upgrade pip
+            pip install -r backend/requirements.txt
+
+            mkdir -p backend/data
+            echo "$BACKEND_ENV_B64" | base64 -d > backend/.env
+
+            sudo tee /etc/systemd/system/genai-backend.service >/dev/null <<UNIT
+            [Unit]
+            Description=Eco-Health FastAPI Backend
+            After=network.target
+
+            [Service]
+            Type=simple
+            User=ubuntu
+            WorkingDirectory=${APP_DIR}/backend
+            Environment=PYTHONUNBUFFERED=1
+            ExecStart=${APP_DIR}/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+            Restart=always
+            RestartSec=3
+
+            [Install]
+            WantedBy=multi-user.target
+            UNIT
+
+            sudo systemctl daemon-reload
+            sudo systemctl enable genai-backend
+            sudo systemctl restart genai-backend
+
+            for i in {1..30}; do
+              if curl -fsS --max-time 2 http://127.0.0.1:8000/docs >/dev/null; then
+                break
+              fi
+              if [ "$i" -eq 30 ]; then
+                echo "Backend health check failed"
+                sudo journalctl -u genai-backend -n 120 --no-pager
+                exit 1
+              fi
+              sleep 2
+            done
+            sudo systemctl --no-pager --full status genai-backend | head -n 20

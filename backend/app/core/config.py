@@ -23,6 +23,9 @@ class Settings(BaseSettings):
         default="development", alias="ENV"
     )
     debug: bool = Field(default=True, alias="DEBUG")
+    cors_allowed_origins: str = Field(
+        default="http://localhost:3000", alias="CORS_ALLOWED_ORIGINS"
+    )
 
     # Agent + model settings
     gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")

@@ -60,6 +60,7 @@ Current baseline: `85 passed`.
 Required:
 
 - `GEMINI_API_KEY`
+- `CORS_ALLOWED_ORIGINS` (comma separated, e.g. `https://your-frontend.vercel.app,http://localhost:3000`)
 - `RAILTRACKS_ENABLED`
 - `GEMINI_MODEL` (or `RAILTRACKS_MODEL`)
 - `GEMINI_VISION_MODEL`
