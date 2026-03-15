@@ -61,19 +61,20 @@ def analyze_meal_vision(
 ) -> dict[str, Any]:
     """Return normalized meal recognition and nutrition estimate."""
 
-    parsed = parse_meal_with_gemini(image_url) if not any([meal_name, calories, protein_g, carbs_g, fat_g]) else {}
-    if not any([meal_name, calories, protein_g, carbs_g, fat_g]) and not parsed:
+    # Always parse from image when available; caller overrides can selectively replace fields.
+    parsed = parse_meal_with_gemini(image_url) or {}
+    if not parsed and calories is None and protein_g is None and carbs_g is None and fat_g is None:
         raise ValueError("Meal vision parsing failed")
 
     return {
         "image_url": image_url,
-        "meal_name": meal_name or (parsed or {}).get("meal_name") or "recognized meal",
-        "calories": calories or (parsed or {}).get("calories") or 0,
-        "protein_g": protein_g or (parsed or {}).get("protein_g") or 0,
-        "carbs_g": carbs_g or (parsed or {}).get("carbs_g") or 0,
-        "fat_g": fat_g or (parsed or {}).get("fat_g") or 0,
-        "highlights": (parsed or {}).get("highlights") or [],
-        "suggestions": (parsed or {}).get("suggestions") or [],
+        "meal_name": (meal_name.strip() if isinstance(meal_name, str) else "") or parsed.get("meal_name") or "recognized meal",
+        "calories": calories if calories is not None else (parsed.get("calories") if parsed.get("calories") is not None else 0),
+        "protein_g": protein_g if protein_g is not None else (parsed.get("protein_g") if parsed.get("protein_g") is not None else 0),
+        "carbs_g": carbs_g if carbs_g is not None else (parsed.get("carbs_g") if parsed.get("carbs_g") is not None else 0),
+        "fat_g": fat_g if fat_g is not None else (parsed.get("fat_g") if parsed.get("fat_g") is not None else 0),
+        "highlights": parsed.get("highlights") or [],
+        "suggestions": parsed.get("suggestions") or [],
     }
 
 

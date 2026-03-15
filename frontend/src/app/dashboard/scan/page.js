@@ -173,7 +173,7 @@ export default function UnifiedScanPage() {
   const [fridgeImageUrl, setFridgeImageUrl] = useState("");
   const [mealImageUrl, setMealImageUrl] = useState("");
   const [receiptImageUrl, setReceiptImageUrl] = useState("");
-  const [mealName, setMealName] = useState("Logged meal");
+  const [mealName, setMealName] = useState("");
   const [pantry, setPantry] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [receiptItems, setReceiptItems] = useState([]);
@@ -446,6 +446,7 @@ export default function UnifiedScanPage() {
                   type="text"
                   value={mealName}
                   onChange={(event) => setMealName(event.target.value)}
+                  placeholder="Optional: e.g. Lunch bowl"
                   className="rounded-lg border border-slate-200 bg-slate-50 p-3"
                 />
               </label>

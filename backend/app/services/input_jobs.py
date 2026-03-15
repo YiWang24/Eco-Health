@@ -139,10 +139,10 @@ def process_input_job(job_id: str) -> None:
             meal = MealLog(
                 user_id=job.user_id,
                 meal_name=parsed.get("meal_name") or "recognized meal",
-                calories=parsed.get("calories") or 520,
-                protein_g=parsed.get("protein_g") or 28,
-                carbs_g=parsed.get("carbs_g") or 46,
-                fat_g=parsed.get("fat_g") or 20,
+                calories=parsed.get("calories") if parsed.get("calories") is not None else 520,
+                protein_g=parsed.get("protein_g") if parsed.get("protein_g") is not None else 28,
+                carbs_g=parsed.get("carbs_g") if parsed.get("carbs_g") is not None else 46,
+                fat_g=parsed.get("fat_g") if parsed.get("fat_g") is not None else 20,
             )
             db.add(meal)
             db.flush()
