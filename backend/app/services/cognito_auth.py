@@ -150,11 +150,16 @@ def _generate_secure_password() -> str:
 
 def cognito_request_email_otp(email: str, settings: Settings) -> dict:
     """Auto-register new user if needed, then initiate EMAIL_OTP challenge."""
+    local_part = email.split("@")[0]
     sign_up_payload: dict = {
         "ClientId": settings.cognito_client_id,
         "Username": email,
         "Password": _generate_secure_password(),
-        "UserAttributes": [{"Name": "email", "Value": email}],
+        "UserAttributes": [
+            {"Name": "email", "Value": email},
+            {"Name": "given_name", "Value": local_part},
+            {"Name": "family_name", "Value": local_part},
+        ],
     }
     secret_hash = _secret_hash(email, settings)
     if secret_hash:
