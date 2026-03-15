@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.database import init_db, persist_sqlite_snapshot
+from app.core.rate_limit import DailyRateLimitMiddleware
 
 settings = get_settings()
 
@@ -30,6 +31,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(DailyRateLimitMiddleware)
 
 app.include_router(api_router, prefix=settings.api_v1_str)
 
