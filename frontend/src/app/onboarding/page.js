@@ -132,6 +132,9 @@ export default function OnboardingPage() {
   }, [authorized, userId]);
 
   const targets = useMemo(() => GOAL_TEMPLATES[goalType], [goalType]);
+  const isAgeValid = Number(form.age) > 0;
+  const isWeightValid = Number(form.weight_kg) > 0;
+  const canSubmit = isAgeValid && isWeightValid && !saving && !loading;
 
   function toggleInList(field, value) {
     setForm((prev) => {
@@ -146,6 +149,10 @@ export default function OnboardingPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     if (saving) return;
+    if (!isAgeValid || !isWeightValid) {
+      setError("Age and weight are required.");
+      return;
+    }
 
     setSaving(true);
     setError("");
@@ -203,10 +210,11 @@ export default function OnboardingPage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <label className="flex flex-col gap-2">
-              <span className="text-sm font-semibold">Age</span>
+              <span className="text-sm font-semibold">Age *</span>
               <input
                 type="number"
                 min="1"
+                required
                 value={form.age}
                 onChange={(e) => setForm((prev) => ({ ...prev, age: e.target.value }))}
                 placeholder="e.g. 28"
@@ -225,10 +233,11 @@ export default function OnboardingPage() {
               />
             </label>
             <label className="flex flex-col gap-2">
-              <span className="text-sm font-semibold">Weight (kg)</span>
+              <span className="text-sm font-semibold">Weight (kg) *</span>
               <input
                 type="number"
                 min="1"
+                required
                 value={form.weight_kg}
                 onChange={(e) => setForm((prev) => ({ ...prev, weight_kg: e.target.value }))}
                 placeholder="72"
@@ -363,7 +372,7 @@ export default function OnboardingPage() {
 
           <button
             type="submit"
-            disabled={saving || loading}
+            disabled={!canSubmit}
             className="w-full md:w-auto px-10 py-4 bg-primary text-white rounded-xl font-bold text-lg disabled:opacity-50"
           >
             {saving ? "Saving..." : loading ? "Loading..." : "Create My Nutrition Profile"}
