@@ -95,6 +95,11 @@ def process_input_job(job_id: str) -> None:
             db.flush()
             result["meal_logged"] = True
             result["meal_log_id"] = meal.id
+            result["meal_name"] = meal.meal_name
+            result["calories"] = int(meal.calories or 0)
+            result["protein_g"] = int(meal.protein_g or 0)
+            result["carbs_g"] = int(meal.carbs_g or 0)
+            result["fat_g"] = int(meal.fat_g or 0)
 
         elif job.input_type == "receipt_scan":
             parsed = parse_receipt_items(payload.get("image_url", ""), payload.get("items"))
@@ -121,11 +126,17 @@ def process_input_job(job_id: str) -> None:
         db.add(job)
         db.commit()
     except Exception as exc:  # pragma: no cover - defensive guard
-        failed_job = db.get(InputJob, job_id)
-        if failed_job:
-            failed_job.status = "FAILED"
-            failed_job.error_message = str(exc)
-            db.add(failed_job)
-            db.commit()
+        db.rollback()
+        try:
+            failed_job = db.get(InputJob, job_id)
+            if failed_job:
+                failed_job.status = "FAILED"
+                failed_job.error_message = str(exc)
+                db.add(failed_job)
+                db.commit()
+        except Exception:
+            db.rollback()
+            # Keep this function non-throwing for background execution.
+            pass
     finally:
         db.close()

@@ -4,9 +4,11 @@ Backend MVP for **Eco-Health Agentic Dietitian**.
 
 ## Status
 
-- Railtracks-only **agentic stage workflow**:
+- Gemini-first **agentic stage workflow** (via Railtracks orchestration):
   `Perceive -> Prioritize -> Retrieve -> Query Recipe -> Formulate -> Reflect -> Finalize Execution Plan`.
 - Core planner + ingestion + feedback replan loop implemented with strict JWT auth.
+- Cognito auth APIs available: email sign-up, email confirmation, login, token refresh.
+- Development demo bypass is opt-in only (`AUTH_BYPASS_ENABLED=true` + `X-Demo-User`).
 - Default persistence uses memory-first SQLite with file snapshot backup (restore on startup, flush on every write commit).
 - Vector store defaults to memory mode with local snapshot file for bootstrap.
 - Execution tools are local and persisted:
@@ -38,11 +40,12 @@ By default, the backend starts with memory-first local storage and snapshot file
 uv run pytest -q
 ```
 
-Current baseline: `77 passed`.
+Current baseline: `85 passed`.
 
 ## Planner Response (V1)
 
-`POST /api/v1/planner/recommendations` and `/replan` now return `RecommendationBundle`:
+`POST /api/v1/planner/recommendations`, `GET /api/v1/planner/recommendations/{recommendation_id}`,
+`GET /api/v1/planner/recommendations/history/{user_id}` and `/replan` now return `RecommendationBundle`:
 
 - `recommendation_id`
 - `decision` (`recipe_title`, `rationale`, `confidence`)
@@ -56,10 +59,11 @@ Current baseline: `77 passed`.
 
 Required:
 
-- `OPENAI_API_KEY`
+- `GEMINI_API_KEY`
 - `RAILTRACKS_ENABLED`
-- `RAILTRACKS_BASE_URL`
-- `RAILTRACKS_MODEL`
+- `GEMINI_MODEL` (or `RAILTRACKS_MODEL`)
+- `GEMINI_VISION_MODEL`
+- `GEMINI_EMBEDDING_MODEL`
 - `VECTOR_STORE_MODE`
 - `CHROMA_PERSIST_DIR`
 - `CHROMA_COLLECTION_NAME`
@@ -80,8 +84,9 @@ Optional:
 - `SQLITE_AUTO_SNAPSHOT`
 - `COGNITO_JWKS_JSON` / `COGNITO_JWKS_PATH`  
   Useful for strict offline JWT verification in local/dev tests.
+- `AUTH_BYPASS_ENABLED`  
+  If `true` in development, bypasses Cognito and reads `X-Demo-User` from request headers.
 - `REDIS_URL`
-- `GEMINI_API_KEY` (for external image generation/testing workflows only)
 
 ## Recipe Provider
 

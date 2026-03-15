@@ -22,7 +22,7 @@ export default function HeroSection() {
             </p>
           </div>
           <div className="flex flex-wrap gap-4">
-            <Button href={ROUTES.onboarding} variant="primaryLarge" size="lg">
+            <Button href={`${ROUTES.auth}?mode=register`} variant="primaryLarge" size="lg">
               Get Started Free
             </Button>
             <Button variant="outline" size="lg">

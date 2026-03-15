@@ -11,12 +11,130 @@ from app.agents.rt_workflow import get_railtracks_workflow
 from app.agents.tools import decompose_cooking_workflow, schedule_proactive_prep, sync_to_calendar
 from app.models.plan_run import PlanRun
 from app.models.recommendation import Recommendation
-from app.schemas.contracts import ExecutionPlanBlock, PlanRequest
+from app.schemas.contracts import (
+    DecisionBlock,
+    ExecutionPlanBlock,
+    GroceryItem,
+    GroceryPlanBlock,
+    MealPlanBlock,
+    MemoryUpdatesBlock,
+    PlanRequest,
+    ReflectionBlock,
+    NutritionSummary,
+)
 from app.services.user_memory import (
     count_expiring_items_used,
     infer_used_inventory,
     update_memory_after_recommendation,
 )
+
+
+def _meal_target(target: int | None, *, ratio: float, default: int, minimum: int) -> int:
+    if target is None:
+        return default
+    return max(minimum, int(target * ratio))
+
+
+def _fallback_recommendation(request: PlanRequest, exc: Exception) -> "AgentPlanOutputV1":
+    from app.agents.io_contracts import AgentPlanOutputV1
+
+    inventory_items = request.inventory.items if request.inventory else []
+    prioritized = sorted(
+        inventory_items,
+        key=lambda item: item.expires_in_days if item.expires_in_days is not None else 999,
+    )
+    primary = prioritized[0].ingredient if prioritized else "balanced ingredients"
+    recipe_title = f"{primary.title()} Rescue Bowl" if prioritized else "Balanced Nourish Bowl"
+
+    spoilage_alerts = [
+        f"Use {item.ingredient} within {item.expires_in_days} day(s)"
+        for item in prioritized
+        if item.expires_in_days is not None and item.expires_in_days <= 2
+    ][:3]
+
+    substitution_hints = ["Adjust seasoning and portion size to your preference"]
+    restrictions = {item.lower() for item in request.constraints.dietary_restrictions}
+    if restrictions:
+        substitution_hints.append(
+            "Respect dietary restrictions: " + ", ".join(sorted(restrictions))
+        )
+    if request.constraints.allergies:
+        substitution_hints.append(
+            "Avoid allergens: " + ", ".join(sorted({item.lower() for item in request.constraints.allergies}))
+        )
+
+    in_stock = {item.ingredient.lower() for item in inventory_items}
+    grocery_seed = ["onion", "garlic", "olive oil", "herbs"]
+    grocery_items = [
+        GroceryItem(ingredient=item, reason="fallback pantry completion")
+        for item in grocery_seed
+        if item not in in_stock
+    ][:4]
+
+    return AgentPlanOutputV1(
+        decision=DecisionBlock(
+            recipe_title=recipe_title,
+            rationale="Fallback planner generated a stable recommendation for demo continuity",
+            confidence=0.62,
+        ),
+        meal_plan=MealPlanBlock(
+            steps=[
+                f"Prepare {primary} and other available ingredients",
+                "Saute aromatics and add protein/vegetables",
+                "Simmer briefly and adjust seasoning",
+                "Plate and serve with optional whole grains",
+            ],
+            nutrition_summary=NutritionSummary(
+                calories=_meal_target(
+                    request.constraints.calories_target,
+                    ratio=0.35,
+                    default=560,
+                    minimum=320,
+                ),
+                protein_g=_meal_target(
+                    request.constraints.protein_g_target,
+                    ratio=0.35,
+                    default=28,
+                    minimum=12,
+                ),
+                carbs_g=_meal_target(
+                    request.constraints.carbs_g_target,
+                    ratio=0.35,
+                    default=52,
+                    minimum=16,
+                ),
+                fat_g=_meal_target(
+                    request.constraints.fat_g_target,
+                    ratio=0.35,
+                    default=18,
+                    minimum=8,
+                ),
+            ),
+            substitutions=substitution_hints,
+            spoilage_alerts=spoilage_alerts,
+        ),
+        grocery_plan=GroceryPlanBlock(
+            missing_ingredients=grocery_items,
+            optimized_grocery_list=grocery_items,
+            estimated_gap_cost=float(len(grocery_items) * 2.0),
+        ),
+        execution_plan=ExecutionPlanBlock(),
+        reflection=ReflectionBlock(
+            status="fallback",
+            attempts=1,
+            violations=[{"type": "workflow_unavailable", "detail": str(exc)}],
+            adjustments=["Used deterministic local fallback planner"],
+        ),
+        memory_updates=MemoryUpdatesBlock(
+            short_term_updates=["fallback_planner_used"],
+            long_term_metric_deltas={},
+        ),
+        trace_notes=[
+            "workflow:fallback-local",
+            f"fallback:{exc.__class__.__name__}",
+        ],
+        mode="fallback-local",
+    )
 
 
 async def execute_plan_request(
@@ -40,7 +158,10 @@ async def execute_plan_request(
     try:
         workflow = get_railtracks_workflow()
         agent_input = AgentPlanInputV1.from_plan_request(request)
-        recommendation = await workflow.recommend_async(agent_input)
+        try:
+            recommendation = await workflow.recommend_async(agent_input)
+        except Exception as exc:
+            recommendation = _fallback_recommendation(request, exc)
 
         rec = Recommendation(
             user_id=request.user_id,

@@ -1,11 +1,15 @@
 import Link from "next/link";
 
 export default function RecipeCard({ title, kcal, time, imageUrl, href }) {
+  const safeImage =
+    imageUrl ||
+    "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80";
+
   const content = (
     <>
       <div
         className="h-32 w-full bg-cover bg-center group-hover:scale-105 transition-transform duration-200"
-        style={{ backgroundImage: `url('${imageUrl}')` }}
+        style={{ backgroundImage: `url('${safeImage}')` }}
         aria-hidden
       />
       <div className="p-3">

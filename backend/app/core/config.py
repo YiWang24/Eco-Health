@@ -24,13 +24,16 @@ class Settings(BaseSettings):
     )
     debug: bool = Field(default=True, alias="DEBUG")
 
-    # Railtracks settings
-    openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
+    # Agent + model settings
+    gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
     railtracks_enabled: bool = Field(default=False, alias="RAILTRACKS_ENABLED")
-    railtracks_base_url: str = Field(
-        default="https://api.openai.com/v1", alias="RAILTRACKS_BASE_URL"
+    railtracks_base_url: str = Field(default="", alias="RAILTRACKS_BASE_URL")
+    railtracks_model: str = Field(default="gemini-2.5-flash", alias="RAILTRACKS_MODEL")
+    gemini_model: str = Field(default="gemini-2.5-flash", alias="GEMINI_MODEL")
+    gemini_vision_model: str = Field(default="gemini-2.5-flash", alias="GEMINI_VISION_MODEL")
+    gemini_embedding_model: str = Field(
+        default="gemini-embedding-001", alias="GEMINI_EMBEDDING_MODEL"
     )
-    railtracks_model: str = Field(default="gpt-4o-mini", alias="RAILTRACKS_MODEL")
     vector_store_mode: Literal["memory", "file"] = Field(
         default="memory", alias="VECTOR_STORE_MODE"
     )
@@ -42,9 +45,6 @@ class Settings(BaseSettings):
         default="./data/vector_snapshot.json", alias="VECTOR_SNAPSHOT_PATH"
     )
 
-    # Vision image parsing key (if used by vision service implementation)
-    gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
-
     cognito_region: str = Field(default="us-east-1", alias="COGNITO_REGION")
     cognito_user_pool_id: str = Field(default="", alias="COGNITO_USER_POOL_ID")
     cognito_client_id: str = Field(default="", alias="COGNITO_CLIENT_ID")
@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     cognito_jwks_url: str = Field(default="", alias="COGNITO_JWKS_URL")
     cognito_jwks_json: str = Field(default="", alias="COGNITO_JWKS_JSON")
     cognito_jwks_path: str = Field(default="", alias="COGNITO_JWKS_PATH")
+    auth_bypass_enabled: bool = Field(default=False, alias="AUTH_BYPASS_ENABLED")
 
     recipe_api_base_url: str = Field(default="", alias="RECIPE_API_BASE_URL")
     recipe_api_key: str = Field(default="", alias="RECIPE_API_KEY")

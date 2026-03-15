@@ -63,7 +63,7 @@ def test_recommend_async_raises_when_disabled() -> None:
     request = _sample_request()
     settings = MagicMock()
     settings.railtracks_enabled = False
-    settings.openai_api_key = ""
+    settings.gemini_api_key = ""
     settings.railtracks_model = ""
 
     workflow = RailtracksAgenticWorkflow(settings)
@@ -75,8 +75,9 @@ def test_recommend_async_uses_agent_when_enabled() -> None:
     request = _sample_request()
     settings = MagicMock()
     settings.railtracks_enabled = True
-    settings.openai_api_key = "test-key"
-    settings.railtracks_model = "gpt-4o-mini"
+    settings.gemini_api_key = "test-key"
+    settings.gemini_model = "gemini-2.5-flash"
+    settings.railtracks_model = "gemini-2.5-flash"
 
     with patch("app.agents.rt_workflow.get_llm", return_value=MagicMock()):
         with patch("app.agents.rt_workflow.get_vector_store", return_value=MagicMock()):
@@ -101,8 +102,9 @@ def test_recommend_async_raises_on_agent_error() -> None:
     request = _sample_request()
     settings = MagicMock()
     settings.railtracks_enabled = True
-    settings.openai_api_key = "test-key"
-    settings.railtracks_model = "gpt-4o-mini"
+    settings.gemini_api_key = "test-key"
+    settings.gemini_model = "gemini-2.5-flash"
+    settings.railtracks_model = "gemini-2.5-flash"
 
     with patch("app.agents.rt_workflow.get_llm", return_value=MagicMock()):
         with patch("app.agents.rt_workflow.get_vector_store", return_value=MagicMock()):

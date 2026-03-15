@@ -68,6 +68,10 @@ class NutritionSummary(BaseModel):
     fat_g: int
 
 
+class DailyNutritionSummary(NutritionSummary):
+    meal_count: int = 0
+
+
 class GroceryItem(BaseModel):
     ingredient: str
     reason: str

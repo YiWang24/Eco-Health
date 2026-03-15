@@ -1,14 +1,50 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Icon from "@/components/ui/Icon";
-
-export const metadata = {
-  title: "LiveLarder - Agentic Dietitian",
-};
+import { getPantry, getSpoilageAlerts } from "@/lib/api";
+import { ROUTES } from "@/lib/constants";
 
 const FRIDGE_IMAGE =
-  "https://lh3.googleusercontent.com/aida-public/AB6AXuDLgYvJbKOw6jSOoW8hpqd4W0uEfNL_sOuOnL8qfZf5wg4-FSNN3pq81nE50AnNnPaVBeAy4SUe7qlYeOd2kIeQYqtymDaZ7hlb05cSF3xXacpMZTXcR_w7WoENljvIWDkbZ5bUC3u4YFUZhBDZ5ojLYJkvAREjBpItluqiE5Ar-13GcxSQOsnTttEhvJMPBnZvu2QvOGOEol9fxXZbsLC2a07dSJWJiGbTUtDMCsDAYQFa_ZgupJPG9OioKTGp3fs1EJMmYDRmUQxr";
+  "https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=1400&q=80";
+
+function urgencyClass(days) {
+  if (days == null) return "bg-primary/10 text-primary";
+  if (days <= 1) return "bg-red-100 text-red-700";
+  if (days <= 3) return "bg-orange-100 text-orange-700";
+  return "bg-primary/10 text-primary";
+}
 
 export default function LivelarderPage() {
+  const [pantry, setPantry] = useState([]);
+  const [alerts, setAlerts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      setLoading(true);
+      setError("");
+      try {
+        const [pantryRes, alertsRes] = await Promise.all([getPantry(), getSpoilageAlerts()]);
+        if (!active) return;
+        setPantry(Array.isArray(pantryRes) ? pantryRes : []);
+        setAlerts(Array.isArray(alertsRes) ? alertsRes : []);
+      } catch (err) {
+        if (!active) return;
+        setError(err.message || "Failed to load LiveLarder data");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    load();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   return (
     <div className="max-w-[1200px] mx-auto flex flex-1 flex-col gap-8 py-8 px-4 w-full">
       <nav className="flex items-center gap-6 border-b border-primary/5 pb-2">
@@ -16,99 +52,71 @@ export default function LivelarderPage() {
           <Icon name="visibility" className="text-sm" /> LiveLarder
         </span>
         <Link
-          href="#"
-          className="text-slate-500 dark:text-slate-400 pb-2 font-medium text-sm flex items-center gap-2 hover:text-primary transition-colors"
+          href={ROUTES.scanFridge}
+          className="text-slate-500 pb-2 font-medium text-sm flex items-center gap-2 hover:text-primary transition-colors"
         >
-          <Icon name="inventory_2" className="text-sm" /> Inventory
+          <Icon name="camera_alt" className="text-sm" /> Scan
         </Link>
         <Link
-          href="#"
-          className="text-slate-500 dark:text-slate-400 pb-2 font-medium text-sm flex items-center gap-2 hover:text-primary transition-colors"
+          href="/dashboard/recipes"
+          className="text-slate-500 pb-2 font-medium text-sm flex items-center gap-2 hover:text-primary transition-colors"
         >
           <Icon name="menu_book" className="text-sm" /> Recipes
         </Link>
       </nav>
-      <div className="relative group">
-        <div className="relative aspect-[16/9] w-full overflow-hidden rounded-xl bg-slate-200 dark:bg-slate-800 shadow-2xl">
+
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 rounded-xl overflow-hidden border border-slate-200 bg-slate-100 relative min-h-[320px]">
           <div
-            className="absolute inset-0 bg-cover bg-center"
+            className="absolute inset-0 bg-cover bg-center opacity-90"
             style={{ backgroundImage: `url("${FRIDGE_IMAGE}")` }}
           />
-          <div className="absolute inset-0 bg-primary/5 mix-blend-overlay backdrop-blur-[1px]" />
-          {/* Overlays */}
-          <div className="absolute top-[15%] left-[25%] w-32 h-40">
-            <div className="absolute inset-0 border-2 border-red-500 rounded bg-red-500/10 backdrop-blur-[2px] shadow-[0_0_15px_rgba(239,68,68,0.5)]" />
-            <div className="absolute -top-10 left-0 bg-red-600 text-white px-3 py-1.5 rounded-t-lg flex flex-col min-w-[140px]">
-              <div className="flex items-center gap-1">
-                <span className="text-xs">⏰</span>
-                <span className="text-[10px] font-black uppercase tracking-wider">
-                  Critical
-                </span>
+          <div className="absolute inset-0 bg-black/25" />
+          <div className="absolute inset-0 p-4 flex flex-wrap content-start gap-2">
+            {alerts.map((alert, index) => (
+              <div
+                key={`${alert.item_id}-${index}`}
+                className="px-3 py-1.5 rounded-full bg-red-600/90 text-white text-xs font-bold"
+              >
+                {alert.ingredient} • {alert.expires_in_days}d left
               </div>
-              <div className="text-[11px] font-bold">
-                Spinach: Expiring Tomorrow
-              </div>
-              <div className="text-[9px] font-medium opacity-90 italic mt-0.5">
-                Status: Opened
-              </div>
-            </div>
+            ))}
           </div>
-          <div className="absolute bottom-[20%] left-[20%] w-24 h-24">
-            <div className="absolute inset-0 border-2 border-orange-400 rounded bg-orange-400/10 backdrop-blur-[1px]" />
-            <div className="absolute -top-10 left-0 bg-orange-500 text-white px-3 py-1.5 rounded-t-lg flex flex-col min-w-[100px]">
-              <div className="text-[11px] font-bold">Eggs: Eat Soon</div>
-              <div className="text-[9px] font-medium opacity-90 italic">
-                Status: Sealed
-              </div>
-            </div>
+          <div className="absolute bottom-4 left-4 text-white text-xs uppercase tracking-widest bg-black/50 px-2 py-1 rounded">
+            LiveLarder Stream
           </div>
-          <div className="absolute bottom-[25%] right-[25%] w-28 h-20">
-            <div className="absolute inset-0 border-2 border-primary rounded bg-primary/10 backdrop-blur-[1px]" />
-            <div className="absolute -top-10 left-0 bg-primary text-white px-3 py-1.5 rounded-t-lg flex flex-col min-w-[100px]">
-              <div className="text-[11px] font-bold">Greek Yogurt</div>
-              <div className="text-[9px] font-medium opacity-90 italic">
-                Status: Sealed
-              </div>
-            </div>
-          </div>
-          <div className="absolute inset-0 p-6 flex flex-col justify-between pointer-events-none">
-            <div className="flex justify-between items-start">
-              <div className="bg-black/70 backdrop-blur-xl text-white text-[10px] uppercase tracking-[0.2em] px-3 py-1.5 rounded border border-white/20 flex items-center gap-2">
-                <span className="size-2 bg-primary rounded-full animate-pulse" />
-                Digital Twin Stream Active
-              </div>
-              <div className="flex gap-2 pointer-events-auto">
-                <button
-                  type="button"
-                  className="bg-black/40 backdrop-blur-md text-white/90 px-3 py-1.5 rounded border border-white/20 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 hover:bg-black/60 transition-all"
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+          <h2 className="text-base font-bold">Inventory Snapshot</h2>
+          {loading ? (
+            <p className="text-sm text-slate-500">Loading inventory...</p>
+          ) : pantry.length === 0 ? (
+            <p className="text-sm text-slate-500">No items yet. Run a fridge or receipt scan.</p>
+          ) : (
+            <ul className="space-y-2 max-h-[420px] overflow-y-auto">
+              {pantry.map((item) => (
+                <li
+                  key={item.item_id}
+                  className="border border-slate-100 rounded-lg p-3 flex items-center justify-between gap-3"
                 >
-                  <Icon name="recenter" className="text-sm" />
-                  Recalibrate
-                </button>
-              </div>
-            </div>
-            <div className="flex justify-center gap-4 pointer-events-auto">
-              <button
-                type="button"
-                className="bg-white/20 backdrop-blur-2xl border border-white/30 text-white rounded-full size-12 flex items-center justify-center hover:bg-white/40 transition-all"
-              >
-                <Icon name="layers" />
-              </button>
-              <button
-                type="button"
-                className="bg-primary text-white px-10 py-4 rounded-full font-bold shadow-[0_0_30px_rgba(76,174,79,0.4)] flex items-center gap-3 hover:scale-105 transition-all"
-              >
-                <Icon name="sync_alt" />
-                Update Inventory
-              </button>
-              <button
-                type="button"
-                className="bg-white/20 backdrop-blur-2xl border border-white/30 text-white rounded-full size-12 flex items-center justify-center hover:bg-white/40 transition-all"
-              >
-                <Icon name="info" />
-              </button>
-            </div>
-          </div>
+                  <div>
+                    <p className="font-semibold text-sm">{item.ingredient}</p>
+                    <p className="text-xs text-slate-500">{item.quantity || item.source}</p>
+                  </div>
+                  <span className={`text-xs px-2 py-1 rounded-full font-semibold ${urgencyClass(item.expires_in_days)}`}>
+                    {item.expires_in_days == null ? "fresh" : `${item.expires_in_days}d`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
     </div>

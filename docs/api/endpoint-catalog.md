@@ -35,6 +35,8 @@ Only self-scope (`{user_id} == token.sub`) is allowed.
 ## 4. Planner
 
 - `POST /planner/recommendations`
+- `GET /planner/recommendations/{recommendation_id}`
+- `GET /planner/recommendations/history/{user_id}?limit=<n>`
 - `POST /planner/recommendations/{recommendation_id}/replan`
 - `GET /planner/recommendations/latest/{user_id}`
 - `GET /planner/runs/latest/{user_id}`

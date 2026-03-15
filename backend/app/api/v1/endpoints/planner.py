@@ -1,6 +1,6 @@
 """Planning endpoints for recommendation generation and retrieval."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -113,6 +113,43 @@ async def replan_recommendation(
         trigger=f"manual_replan:{recommendation_id}",
     )
     return _to_bundle(replanned)
+
+
+@router.get("/recommendations/{recommendation_id}", response_model=RecommendationBundle)
+async def get_recommendation(
+    recommendation_id: str,
+    current_user: AuthContext = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> RecommendationBundle:
+    rec = db.get(Recommendation, recommendation_id)
+    if not rec:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recommendation not found")
+    if rec.user_id != current_user.user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden recommendation scope")
+    return _to_bundle(rec)
+
+
+@router.get("/recommendations/history/{user_id}", response_model=list[RecommendationBundle])
+async def list_recommendation_history(
+    user_id: str,
+    limit: int = Query(default=20, ge=1, le=100),
+    current_user: AuthContext = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[RecommendationBundle]:
+    if user_id != current_user.user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden user scope")
+
+    rows = (
+        db.execute(
+            select(Recommendation)
+            .where(Recommendation.user_id == user_id)
+            .order_by(Recommendation.created_at.desc())
+            .limit(limit)
+        )
+        .scalars()
+        .all()
+    )
+    return [_to_bundle(rec) for rec in rows]
 
 
 @router.get("/recommendations/latest/{user_id}", response_model=RecommendationBundle)

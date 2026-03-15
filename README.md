@@ -113,7 +113,7 @@ The planner decides **what** to eat, and retrieval provides **how** to make it w
 - **Languages**: Python (backend), Markdown (design/docs), JavaScript/TypeScript planned for frontend
 - **Backend**: FastAPI
 - **Agent framework**: Railtracks orchestrator
-- **Model provider**: OpenAI-compatible API
+- **Model provider**: Google Gemini API
 - **Auth**: AWS Cognito
 - **Database**: SQLite memory-first + file snapshot storage
 - **Vector Store**: Chroma memory-first + local snapshot/file modes
@@ -138,15 +138,22 @@ uv run uvicorn app.main:app --reload --port 8000
 ```
 
 Notes:
-- For planner and vision parsing, set `OPENAI_API_KEY` in `backend/.env`.
+- For planner, vision parsing, and vector embeddings, set `GEMINI_API_KEY` in `backend/.env`.
 - Input image URLs must be reachable by the backend service.
 - Local deterministic test suite:
   `cd backend && uv run pytest -q`
 
 Frontend:
 
-- `frontend/` currently contains placeholder documentation only.
-- Frontend implementation will consume contracts in `docs/api/openapi-contract.md`.
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Frontend uses backend contracts in `docs/api/openapi-contract.md`.
+If you do not have Cognito configured in local dev, backend auto-enables development auth bypass
+(`X-Demo-User`) so the demo flow can run end-to-end.
 
 ## Demo Flow Script (judge-friendly)
 

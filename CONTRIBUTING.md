@@ -17,11 +17,11 @@ The test `conftest.py` sets safe defaults for all required variables. For local 
 ```
 DATABASE_URL=sqlite:///./eco_health.db
 RAILTRACKS_ENABLED=false
-ADK_ENABLED=false
-OPENAI_API_KEY=            # required only for Railtracks
-GEMINI_API_KEY=            # required only for ADK / vision
-RAILTRACKS_MODEL=gpt-4o-mini
-RAILTRACKS_BASE_URL=https://api.openai.com/v1
+GEMINI_API_KEY=            # required when Railtracks planner or vision parsing is enabled
+RAILTRACKS_MODEL=gemini-2.5-flash
+GEMINI_VISION_MODEL=gemini-2.5-flash
+GEMINI_EMBEDDING_MODEL=gemini-embedding-001
+RAILTRACKS_BASE_URL=https://generativelanguage.googleapis.com/v1beta
 CHROMA_PERSIST_DIR=./chroma_db
 CHROMA_COLLECTION_NAME=eco_health
 ```
@@ -34,14 +34,12 @@ Most tests run offline with mocked services. To run tests that hit real APIs:
 
 | Flag | Workflow | Required Key |
 |------|----------|-------------|
-| `RUN_RAILTRACKS_E2E=1` | Railtracks end-to-end | `OPENAI_API_KEY` |
-| `RUN_REAL_E2E_AGENTIC=1` | ADK full agentic flow | `GEMINI_API_KEY` |
-| `RUN_ALL_E2E=1` | Both workflows | `OPENAI_API_KEY` + `GEMINI_API_KEY` |
+| `RUN_RAILTRACKS_E2E=1` | Railtracks + Gemini end-to-end | `GEMINI_API_KEY` |
 
 Example:
 
 ```bash
-RUN_RAILTRACKS_E2E=1 OPENAI_API_KEY=sk-... uv run pytest tests/test_e2e_agentic_full_flow.py -q -s
+RUN_RAILTRACKS_E2E=1 GEMINI_API_KEY=... uv run pytest tests/ -q -s
 ```
 
 ## Test Fixture Architecture
@@ -56,7 +54,6 @@ RUN_RAILTRACKS_E2E=1 OPENAI_API_KEY=sk-... uv run pytest tests/test_e2e_agentic_
 | `sample_plan_request` | `PlanRequest` combining the above fixtures |
 | `mock_railtracks_settings` | `MagicMock` settings with Railtracks enabled |
 | `enable_railtracks` | `monkeypatch` fixture that sets `RAILTRACKS_ENABLED=true` + test API key |
-| `enable_adk` | `monkeypatch` fixture that sets `ADK_ENABLED=true` + test Gemini key |
 
 The database lifecycle fixture (`database_lifecycle`) creates tables at session start and drops them at session end. Tests use a shared in-memory SQLite database so request handlers, background jobs, and test sessions can operate on the same database state, while local development uses a file-backed SQLite database for persistence across app restarts.
 

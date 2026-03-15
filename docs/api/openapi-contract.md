@@ -2,9 +2,13 @@
 
 - Base URL: `http://localhost:8000`
 - Prefix: `/api/v1`
-- Planner engine: Railtracks only
+- Planner engine: Railtracks orchestration with Gemini models
 - Auth: strict Cognito JWT verification via `Authorization: Bearer <cognito_access_token>`
 - Content-Type: `application/json`
+
+Local demo mode (development only):
+- If Cognito issuer/client-id are not configured, backend accepts `X-Demo-User` header for auth bypass.
+- This mode is intended for hackathon/local integration demos only.
 
 ## 1. Common Models
 

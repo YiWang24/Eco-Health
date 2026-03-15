@@ -58,11 +58,10 @@ os.environ["SQLITE_SNAPSHOT_PATH"] = str(BACKEND_ROOT / "tests" / ".tmp" / "snap
 os.environ["SQLITE_AUTO_SNAPSHOT"] = "true"
 os.environ["ENV"] = "development"
 os.environ["RAILTRACKS_ENABLED"] = "false"
-os.environ["OPENAI_API_KEY"] = ""
 os.environ["GEMINI_API_KEY"] = ""
 os.environ["RECIPE_API_BASE_URL"] = ""
-os.environ["RAILTRACKS_BASE_URL"] = "https://api.openai.com/v1"
-os.environ["RAILTRACKS_MODEL"] = "gpt-4o-mini"
+os.environ["RAILTRACKS_BASE_URL"] = "https://generativelanguage.googleapis.com/v1beta"
+os.environ["RAILTRACKS_MODEL"] = "gemini-2.5-flash"
 os.environ["VECTOR_STORE_MODE"] = "memory"
 os.environ["CHROMA_PERSIST_DIR"] = "./test_chroma_db"
 os.environ["CHROMA_COLLECTION_NAME"] = "test_eco_health"
@@ -282,9 +281,10 @@ def mock_railtracks_settings():
     """Mock settings for Railtracks-enabled tests."""
     settings = MagicMock()
     settings.railtracks_enabled = True
-    settings.openai_api_key = "test-key-12345"
-    settings.railtracks_model = "gpt-4o-mini"
-    settings.railtracks_base_url = "https://api.openai.com/v1"
+    settings.gemini_api_key = "test-key-12345"
+    settings.gemini_model = "gemini-2.5-flash"
+    settings.railtracks_model = "gemini-2.5-flash"
+    settings.railtracks_base_url = "https://generativelanguage.googleapis.com/v1beta"
     settings.vector_store_mode = "memory"
     settings.chroma_persist_dir = "./test_chroma_db"
     settings.chroma_collection_name = "test_eco_health"
@@ -295,7 +295,7 @@ def mock_railtracks_settings():
 def mock_railtracks_llm():
     """Mock Railtracks LLM for testing."""
     llm = MagicMock()
-    llm.model = "gpt-4o-mini"
+    llm.model = "gemini-2.5-flash"
     llm.api_key = "test-key"
     return llm
 
@@ -341,7 +341,7 @@ def mock_recipe_candidates():
 def enable_railtracks(monkeypatch):
     """Enable Railtracks for a test."""
     monkeypatch.setenv("RAILTRACKS_ENABLED", "true")
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key-for-testing")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key-for-testing")
     from app.agents.rt_config import get_vector_store
     from app.core.config import get_settings
 

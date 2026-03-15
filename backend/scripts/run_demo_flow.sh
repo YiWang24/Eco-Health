@@ -12,8 +12,7 @@ if [[ ! -f "$SEED_FILE" ]]; then
 fi
 
 if [[ -z "$TOKEN" ]]; then
-  echo "TOKEN is required (strict JWT auth enabled)." >&2
-  exit 1
+  echo "TOKEN is empty. Using development demo auth headers (X-Demo-User)." >&2
 fi
 
 export BASE_URL TOKEN USER_ID SEED_FILE
@@ -43,15 +42,21 @@ api() {
   local method="$1"
   local path="$2"
   local body="${3:-}"
+  local auth_header=()
+  if [[ -n "$TOKEN" ]]; then
+    auth_header=(-H "Authorization: Bearer $TOKEN")
+  else
+    auth_header=(-H "X-Demo-User: $USER_ID" -H "X-Demo-User-Id: $USER_ID")
+  fi
 
   if [[ -n "$body" ]]; then
     curl -sS -X "$method" "$BASE_URL$path" \
-      -H "Authorization: Bearer $TOKEN" \
+      "${auth_header[@]}" \
       -H "Content-Type: application/json" \
       -d "$body"
   else
     curl -sS -X "$method" "$BASE_URL$path" \
-      -H "Authorization: Bearer $TOKEN"
+      "${auth_header[@]}"
   fi
 }
 

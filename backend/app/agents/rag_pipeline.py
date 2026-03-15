@@ -174,12 +174,30 @@ class RAGPipeline:
             )
             ids.append(recipe_id)
 
-        if documents and self._vector_store:
+        if not documents or not self._vector_store:
+            return
+
+        if hasattr(self._vector_store, "add_texts"):
             self._vector_store.add_texts(
                 texts=documents,
                 metadatas=metadatas,
                 ids=ids,
             )
+            return
+
+        # Railtracks >=1.x ChromaVectorStore API path.
+        if hasattr(self._vector_store, "upsert"):
+            from railtracks.vector_stores.vector_store_base import Chunk
+
+            chunks = [
+                Chunk(
+                    content=documents[index],
+                    id=ids[index],
+                    metadata=metadatas[index],
+                )
+                for index in range(len(documents))
+            ]
+            self._vector_store.upsert(chunks)
 
     @staticmethod
     def _create_recipe_document(
@@ -237,21 +255,34 @@ class RAGPipeline:
             if not query:
                 return self._keyword_retrieve(inventory, constraints, limit)
 
-            results = self._vector_store.similarity_search(
-                query=query,
-                k=limit,
-            )
+            if hasattr(self._vector_store, "similarity_search"):
+                results = self._vector_store.similarity_search(
+                    query=query,
+                    k=limit,
+                )
+            elif hasattr(self._vector_store, "search"):
+                results = self._vector_store.search(query=query, top_k=limit)
+                if results and isinstance(results, list) and isinstance(results[0], list):
+                    results = results[0]
+            else:
+                return self._keyword_retrieve(inventory, constraints, limit)
 
             recipes = []
             for doc in results:
                 metadata = getattr(doc, "metadata", {})
+                distance = getattr(doc, "distance", None)
+                relevance_score = (
+                    1.0 / (1.0 + float(distance))
+                    if distance is not None
+                    else getattr(doc, "score", 1.0)
+                )
                 recipes.append(
                     {
                         "recipe_id": metadata.get("recipe_id", ""),
                         "recipe_title": metadata.get("recipe_title", "Unknown"),
                         "category": metadata.get("category", ""),
                         "area": metadata.get("area", ""),
-                        "relevance_score": getattr(doc, "score", 1.0),
+                        "relevance_score": relevance_score,
                         "source": "vector_search",
                     }
                 )

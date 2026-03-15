@@ -1,5 +1,7 @@
 """Input ingestion endpoints for fridge, meal, receipt, and chat context."""
 
+from datetime import datetime, time, timezone
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -8,6 +10,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.chat_message import ChatMessage
 from app.models.input_job import InputJob
+from app.models.meal_log import MealLog
 from app.models.pantry_item import PantryItem
 from app.schemas.auth import AuthContext
 from app.schemas.contracts import (
@@ -15,6 +18,7 @@ from app.schemas.contracts import (
     ChatMessageRequest,
     ChatMessageResponse,
     ConstraintSet,
+    DailyNutritionSummary,
     FridgeScanRequest,
     JobEnvelope,
     JobStatus,
@@ -247,3 +251,33 @@ async def get_latest_chat_messages(
         )
         for event in events
     ]
+
+
+@router.get("/nutrition/today", response_model=DailyNutritionSummary)
+async def get_today_nutrition(
+    current_user: AuthContext = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> DailyNutritionSummary:
+    now_utc = datetime.now(timezone.utc)
+    start_of_day = datetime.combine(now_utc.date(), time.min, tzinfo=timezone.utc)
+
+    meals = (
+        db.execute(
+            select(MealLog)
+            .where(
+                MealLog.user_id == current_user.user_id,
+                MealLog.created_at >= start_of_day,
+            )
+            .order_by(MealLog.created_at.desc())
+        )
+        .scalars()
+        .all()
+    )
+
+    return DailyNutritionSummary(
+        calories=sum(int(meal.calories or 0) for meal in meals),
+        protein_g=sum(int(meal.protein_g or 0) for meal in meals),
+        carbs_g=sum(int(meal.carbs_g or 0) for meal in meals),
+        fat_g=sum(int(meal.fat_g or 0) for meal in meals),
+        meal_count=len(meals),
+    )

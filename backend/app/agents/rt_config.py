@@ -13,20 +13,21 @@ __all__ = [
 from functools import lru_cache
 from pathlib import Path
 
+import httpx
+
 from app.core.config import Settings, get_settings
 
 try:
     import railtracks as rt
     from railtracks.vector_stores.chroma import ChromaVectorStore
-    from railtracks.rag.embedding_service import EmbeddingService
     RAILTRACKS_AVAILABLE = True
 except Exception:  # pragma: no cover - environment dependent
     RAILTRACKS_AVAILABLE = False
     rt = None  # type: ignore
     ChromaVectorStore = None  # type: ignore
-    EmbeddingService = None  # type: ignore
 
 _VECTOR_BACKEND_SIGNATURE: tuple[str, str | None] | None = None
+_GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 
 
 def _resolve_vector_store_path(settings: Settings) -> str | None:
@@ -38,6 +39,99 @@ def _resolve_vector_store_path(settings: Settings) -> str | None:
     persist_path = Path(settings.chroma_persist_dir).expanduser()
     persist_path.mkdir(parents=True, exist_ok=True)
     return str(persist_path)
+
+
+def _resolve_api_key(settings: Settings) -> str:
+    """Resolve Gemini API key."""
+
+    return (settings.gemini_api_key or "").strip()
+
+
+def _normalize_llm_model_name(name: str) -> str:
+    model_name = (name or "").strip()
+    if model_name.startswith("models/"):
+        model_name = model_name.split("/", 1)[1]
+    if model_name.startswith("gemini/"):
+        model_name = model_name.split("/", 1)[1]
+    return model_name or "gemini-2.5-flash"
+
+
+def _normalize_embedding_model_name(name: str) -> str:
+    model_name = (name or "").strip()
+    if model_name.startswith("gemini/"):
+        model_name = model_name.split("/", 1)[1]
+    if not model_name:
+        model_name = "gemini-embedding-001"
+    if model_name.startswith("models/"):
+        return model_name
+    return f"models/{model_name}"
+
+
+def _single_embed_call(*, api_key: str, model: str, text: str) -> list[float]:
+    """Call Gemini embedContent endpoint for one text."""
+
+    url = f"{_GEMINI_API_BASE}/{model}:embedContent"
+    payload = {
+        "model": model,
+        "content": {"parts": [{"text": text or " "}]},
+        "taskType": "RETRIEVAL_DOCUMENT",
+    }
+    response = httpx.post(
+        url,
+        headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
+        json=payload,
+        timeout=20.0,
+    )
+    response.raise_for_status()
+    body = response.json()
+    values = (body.get("embedding") or {}).get("values") or []
+    if not values:
+        raise RuntimeError("Gemini embedding response missing values")
+    return [float(item) for item in values]
+
+
+def _gemini_embed_texts(*, api_key: str, model: str, texts: list[str]) -> list[list[float]]:
+    """Embed many texts via Gemini API."""
+
+    if not texts:
+        return []
+
+    requests = [
+        {
+            "model": model,
+            "content": {"parts": [{"text": text or " "}]},
+            "taskType": "RETRIEVAL_DOCUMENT",
+        }
+        for text in texts
+    ]
+    url = f"{_GEMINI_API_BASE}/{model}:batchEmbedContents"
+
+    try:
+        response = httpx.post(
+            url,
+            headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
+            json={"requests": requests},
+            timeout=30.0,
+        )
+        response.raise_for_status()
+        body = response.json()
+        embeddings = body.get("embeddings") or []
+        if len(embeddings) == len(texts):
+            parsed: list[list[float]] = []
+            for item in embeddings:
+                values = item.get("values") or []
+                if not values:
+                    raise RuntimeError("Gemini batch embedding response missing values")
+                parsed.append([float(v) for v in values])
+            return parsed
+    except Exception:
+        # Fall back to single-item calls for maximal API compatibility.
+        pass
+
+    return [
+        _single_embed_call(api_key=api_key, model=model, text=text)
+        for text in texts
+    ]
 
 
 def _sync_chroma_backend_signature(mode: str, path: str | None) -> None:
@@ -58,13 +152,10 @@ def _sync_chroma_backend_signature(mode: str, path: str | None) -> None:
 
 @lru_cache(maxsize=1)
 def get_llm():
-    """Initialize and return cached OpenAI LLM instance.
-
-    The LLM is configured using the HuggingFace endpoint compatible with
-    OpenAI API format. Uses settings from environment variables.
+    """Initialize and return cached Gemini LLM instance.
 
     Returns:
-        OpenAILLM: Configured LLM instance for inference.
+        GeminiLLM: Configured LLM instance for inference.
 
     Raises:
         RuntimeError: If Railtracks is not installed or API key is missing.
@@ -76,13 +167,15 @@ def get_llm():
 
     settings: Settings = get_settings()
 
-    if not settings.openai_api_key:
-        raise RuntimeError("OPENAI_API_KEY environment variable is required")
+    api_key = _resolve_api_key(settings)
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY environment variable is required")
 
-    return rt.llm.OpenAILLM(
-        model=settings.railtracks_model,
-        api_key=settings.openai_api_key,
-        base_url=settings.railtracks_base_url,
+    model_name = _normalize_llm_model_name(settings.gemini_model or settings.railtracks_model)
+    return rt.llm.GeminiLLM(
+        model_name=model_name,
+        api_key=api_key,
+        api_base=settings.railtracks_base_url or None,
     )
 
 
@@ -109,11 +202,17 @@ def get_vector_store() -> ChromaVectorStore:
     path = _resolve_vector_store_path(settings)
     _sync_chroma_backend_signature(settings.vector_store_mode, path)
 
-    embedding_service = EmbeddingService()
+    api_key = _resolve_api_key(settings)
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY environment variable is required for vector embedding")
+    embedding_model = _normalize_embedding_model_name(settings.gemini_embedding_model)
+
+    def _embed(texts: list[str]) -> list[list[float]]:
+        return _gemini_embed_texts(api_key=api_key, model=embedding_model, texts=texts)
 
     return ChromaVectorStore(
         collection_name=settings.chroma_collection_name,
-        embedding_function=embedding_service.embed,
+        embedding_function=_embed,
         path=path,
     )
 
@@ -128,5 +227,5 @@ def is_railtracks_enabled() -> bool:
     return bool(
         RAILTRACKS_AVAILABLE
         and settings.railtracks_enabled
-        and settings.openai_api_key
+        and _resolve_api_key(settings)
     )

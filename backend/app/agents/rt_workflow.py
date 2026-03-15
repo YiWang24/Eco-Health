@@ -41,10 +41,11 @@ class RailtracksAgenticWorkflow:
 
     def __init__(self, settings: Settings):
         self.settings = settings
+        resolved_api_key = (settings.gemini_api_key or "").strip()
         self._enabled = bool(
             settings.railtracks_enabled
-            and settings.openai_api_key
-            and settings.railtracks_model
+            and resolved_api_key
+            and (settings.gemini_model or settings.railtracks_model)
         )
         self._llm = None
         self._vector_store = None

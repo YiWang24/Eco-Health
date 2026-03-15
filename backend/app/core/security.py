@@ -17,6 +17,21 @@ _JWKS_CACHE: dict[str, dict] = {}
 _JWKS_CACHE_TTL_SECONDS = 300
 
 
+def _should_use_dev_bypass(settings: Settings) -> bool:
+    """Allow local hackathon demos without Cognito provisioning."""
+
+    return settings.env == "development" and settings.auth_bypass_enabled
+
+
+def _resolve_dev_auth_context(request: Request) -> AuthContext:
+    user_id = (
+        request.headers.get("X-Demo-User")
+        or request.headers.get("X-Demo-User-Id")
+        or "demo-user"
+    ).strip()
+    return AuthContext(user_id=user_id, email=f"{user_id}@demo.local")
+
+
 def _extract_bearer_token(request: Request) -> str:
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
@@ -66,6 +81,24 @@ def _resolve_jwks_url(settings: Settings) -> str:
     return ""
 
 
+def _validate_auth_config(settings: Settings) -> None:
+    if not settings.cognito_client_id:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="COGNITO_CLIENT_ID is required when auth bypass is disabled",
+        )
+    if not (
+        settings.cognito_issuer
+        or settings.cognito_jwks_url
+        or settings.cognito_jwks_json
+        or settings.cognito_jwks_path
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="COGNITO_ISSUER or Cognito JWKS config is required when auth bypass is disabled",
+        )
+
+
 def _fetch_jwks(settings: Settings) -> dict:
     local = _resolve_local_jwks(settings)
     if local is not None:
@@ -111,19 +144,19 @@ def _claims_auth_context(token: str, settings: Settings) -> AuthContext:
         "key": key,
         "algorithms": ["RS256"],
     }
-    options = {
-        "verify_aud": bool(settings.cognito_client_id),
-        "verify_iss": bool(settings.cognito_issuer),
-    }
+    options = {"verify_aud": False, "verify_iss": bool(settings.cognito_issuer)}
     if settings.cognito_issuer:
         decode_kwargs["issuer"] = settings.cognito_issuer
-    if settings.cognito_client_id:
-        decode_kwargs["audience"] = settings.cognito_client_id
 
     try:
         claims = jwt.decode(token, options=options, **decode_kwargs)
     except Exception as exc:  # pragma: no cover - defensive guard
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token verification failed") from exc
+
+    if settings.cognito_client_id:
+        audience_claim = claims.get("aud") or claims.get("client_id")
+        if audience_claim != settings.cognito_client_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token audience mismatch")
 
     sub = claims.get("sub")
     if not sub:
@@ -135,5 +168,9 @@ def _claims_auth_context(token: str, settings: Settings) -> AuthContext:
 def get_current_user(request: Request, settings: Settings = Depends(get_settings)) -> AuthContext:
     """Resolve the authenticated user context from bearer token."""
 
+    if _should_use_dev_bypass(settings):
+        return _resolve_dev_auth_context(request)
+
+    _validate_auth_config(settings)
     token = _extract_bearer_token(request)
     return _claims_auth_context(token, settings)

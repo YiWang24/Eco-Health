@@ -35,15 +35,15 @@ export default function Header({ variant = "welcome" }) {
           </a>
         </nav>
         <div className="flex gap-3">
-          <button
-            type="button"
+          <Link
+            href={`${ROUTES.auth}?mode=login`}
             className="hidden sm:flex min-w-[84px] cursor-pointer items-center justify-center rounded-lg h-10 px-4 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm font-bold hover:bg-slate-200 transition-colors"
-            aria-label="Log in"
+            aria-label="Go to login"
           >
             Log In
-          </button>
+          </Link>
           <Link
-            href={ROUTES.onboarding}
+            href={`${ROUTES.auth}?mode=register`}
             className="flex min-w-[84px] cursor-pointer items-center justify-center rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold shadow-lg shadow-primary/20 hover:opacity-90 transition-all"
           >
             Sign Up
@@ -67,14 +67,14 @@ export default function Header({ variant = "welcome" }) {
         </Link>
       </div>
       <div className="flex items-center gap-4">
-<button
-        type="button"
-        className="relative flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
-        aria-label="Notifications"
-      >
-        <Icon name="notifications" />
-        <span className="absolute right-2.5 top-2.5 flex h-2 w-2 rounded-full bg-primary" aria-hidden />
-      </button>
+        <button
+          type="button"
+          className="relative flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+          aria-label="Notifications"
+        >
+          <Icon name="notifications" />
+          <span className="absolute right-2.5 top-2.5 flex h-2 w-2 rounded-full bg-primary" aria-hidden />
+        </button>
         <Link
           href={ROUTES.profile}
           className="h-10 w-10 rounded-full border-2 border-primary bg-cover bg-center block"

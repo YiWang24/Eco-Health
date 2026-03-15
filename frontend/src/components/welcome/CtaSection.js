@@ -16,7 +16,7 @@ export default function CtaSection() {
           </p>
           <div className="flex flex-wrap justify-center gap-4">
             <Button
-              href={ROUTES.onboarding}
+              href={`${ROUTES.auth}?mode=register`}
               variant="primary"
               size="lg"
               className="!bg-primary !text-white hover:!scale-[1.05]"

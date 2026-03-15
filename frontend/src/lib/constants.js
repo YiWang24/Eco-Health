@@ -2,11 +2,13 @@ export const APP_NAME = "Agentic Dietitian";
 
 export const ROUTES = {
   home: "/",
+  auth: "/auth",
   onboarding: "/onboarding",
   dashboard: "/dashboard",
-  scanFridge: "/dashboard/scan/fridge",
-  scanMeal: "/dashboard/scan/meal",
-  scanReceipt: "/dashboard/scan/receipt",
+  scan: "/dashboard/scan",
+  scanFridge: "/dashboard/scan?tab=fridge",
+  scanMeal: "/dashboard/scan?tab=meal",
+  scanReceipt: "/dashboard/scan?tab=receipt",
   chat: "/dashboard/chat",
   livelarder: "/dashboard/livelarder",
   recipes: "/dashboard/recipes",

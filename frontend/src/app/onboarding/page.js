@@ -1,299 +1,352 @@
-import Link from "next/link";
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import Icon from "@/components/ui/Icon";
 import ProgressStepper from "@/components/onboarding/ProgressStepper";
+import {
+  getCurrentUserId,
+  getGoals,
+  getProfile,
+  hasAuthSession,
+  upsertGoals,
+  upsertProfile,
+} from "@/lib/api";
+import { ROUTES } from "@/lib/constants";
+
+const GOAL_TEMPLATES = {
+  lose_weight: { calories_target: 1700, protein_g_target: 120, carbs_g_target: 150, fat_g_target: 55 },
+  gain_muscle: { calories_target: 2400, protein_g_target: 160, carbs_g_target: 250, fat_g_target: 70 },
+  maintenance: { calories_target: 2100, protein_g_target: 130, carbs_g_target: 220, fat_g_target: 65 },
+};
+
+const DIET_OPTIONS = ["vegetarian", "vegan", "keto", "paleo"];
+const ALLERGY_OPTIONS = ["dairy", "gluten", "nuts", "shellfish"];
 
 export default function OnboardingPage() {
+  const router = useRouter();
+  const userId = getCurrentUserId();
+  const [goalType, setGoalType] = useState("lose_weight");
+  const [form, setForm] = useState({
+    age: "",
+    height_cm: "",
+    weight_kg: "",
+    activity_level: "moderate",
+    dietary_preferences: [],
+    allergies: [],
+    cook_time_preference_minutes: 30,
+    budget_limit: 30,
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [authorized, setAuthorized] = useState(false);
+
+  useEffect(() => {
+    if (!hasAuthSession()) {
+      router.replace(`${ROUTES.auth}?mode=login`);
+      return;
+    }
+    setAuthorized(true);
+  }, [router]);
+
+  useEffect(() => {
+    if (!authorized) return;
+    let active = true;
+    async function load() {
+      setLoading(true);
+      setError("");
+      try {
+        const [profile, goals] = await Promise.all([
+          getProfile(userId).catch(() => null),
+          getGoals(userId).catch(() => null),
+        ]);
+        if (!active) return;
+
+        if (profile) {
+          setForm((prev) => ({
+            ...prev,
+            age: profile.age ?? "",
+            height_cm: profile.height_cm ?? "",
+            weight_kg: profile.weight_kg ?? "",
+            activity_level: profile.activity_level || prev.activity_level,
+            dietary_preferences: profile.dietary_preferences || [],
+            allergies: profile.allergies || [],
+            cook_time_preference_minutes:
+              profile.cook_time_preference_minutes || prev.cook_time_preference_minutes,
+          }));
+        }
+
+        if (goals) {
+          const detectGoalType = Object.entries(GOAL_TEMPLATES).find(([, value]) => {
+            return value.calories_target === goals.calories_target;
+          })?.[0];
+          if (detectGoalType) setGoalType(detectGoalType);
+          setForm((prev) => ({
+            ...prev,
+            dietary_preferences:
+              prev.dietary_preferences.length > 0
+                ? prev.dietary_preferences
+                : goals.dietary_restrictions || [],
+            allergies: prev.allergies.length > 0 ? prev.allergies : goals.allergies || [],
+            budget_limit: goals.budget_limit ?? prev.budget_limit,
+            cook_time_preference_minutes:
+              goals.max_cook_time_minutes ?? prev.cook_time_preference_minutes,
+          }));
+        }
+      } catch (err) {
+        if (!active) return;
+        setError(err.message || "Failed to load onboarding data");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    load();
+    return () => {
+      active = false;
+    };
+  }, [authorized, userId]);
+
+  const targets = useMemo(() => GOAL_TEMPLATES[goalType], [goalType]);
+
+  function toggleInList(field, value) {
+    setForm((prev) => {
+      const exists = prev[field].includes(value);
+      return {
+        ...prev,
+        [field]: exists ? prev[field].filter((item) => item !== value) : [...prev[field], value],
+      };
+    });
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (saving) return;
+
+    setSaving(true);
+    setError("");
+    try {
+      const profilePayload = {
+        age: form.age ? Number(form.age) : null,
+        height_cm: form.height_cm ? Number(form.height_cm) : null,
+        weight_kg: form.weight_kg ? Number(form.weight_kg) : null,
+        activity_level: form.activity_level || null,
+        dietary_preferences: form.dietary_preferences,
+        allergies: form.allergies,
+        cook_time_preference_minutes: Number(form.cook_time_preference_minutes) || null,
+      };
+
+      const goalsPayload = {
+        ...targets,
+        dietary_restrictions: form.dietary_preferences,
+        allergies: form.allergies,
+        budget_limit: Number(form.budget_limit) || null,
+        max_cook_time_minutes: Number(form.cook_time_preference_minutes) || null,
+      };
+
+      await Promise.all([
+        upsertProfile(userId, profilePayload),
+        upsertGoals(userId, goalsPayload),
+      ]);
+
+      router.push("/dashboard");
+    } catch (err) {
+      setError(err.message || "Failed to save onboarding profile");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!authorized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-sm text-slate-500">
+        Checking session...
+      </div>
+    );
+  }
+
   return (
     <div className="layout-content-container flex flex-col max-w-4xl w-full">
       <ProgressStepper step={1} totalSteps={4} />
 
-            <div className="bg-white dark:bg-slate-900 shadow-sm border border-primary/5 rounded-xl overflow-hidden">
-              {/* Section 1: Personal Info */}
-              <div className="p-8 border-b border-slate-100 dark:border-slate-800">
-                <div className="flex items-center gap-3 mb-6">
-                  <Icon name="person" className="text-primary" />
-                  <h3 className="text-2xl font-bold">Tell us about yourself</h3>
-                </div>
-                <p className="text-slate-500 dark:text-slate-400 mb-8">
-                  This data helps our AI calculate your BMR and TDEE.
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <label className="flex flex-col gap-2" htmlFor="onboarding-age">
-                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                      Age
-                    </span>
-                    <input
-                      id="onboarding-age"
-                      type="number"
-                      placeholder="e.g. 28"
-                      className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-primary focus:border-primary p-3"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-2" htmlFor="onboarding-sex">
-                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                      Biological Sex
-                    </span>
-                    <select id="onboarding-sex" className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-primary focus:border-primary p-3">
-                      <option>Male</option>
-                      <option>Female</option>
-                      <option>Other</option>
-                      <option>Prefer not to say</option>
-                    </select>
-                  </label>
-                  <label className="flex flex-col gap-2">
-                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                      Height (cm)
-                    </span>
-                    <input
-                      type="number"
-                      placeholder="175"
-                      className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-primary focus:border-primary p-3"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-2">
-                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                      Current Weight (kg)
-                    </span>
-                    <input
-                      type="number"
-                      placeholder="72"
-                      className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-primary focus:border-primary p-3"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-2 md:col-span-2">
-                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                      Activity Level
-                    </span>
-                    <select className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-primary focus:border-primary p-3">
-                      <option>Sedentary (Office job, little exercise)</option>
-                      <option>Lightly Active (1-2 days/week)</option>
-                      <option>Moderately Active (3-5 days/week)</option>
-                      <option>Very Active (6-7 days/week)</option>
-                      <option>Extra Active (Physical job + intense training)</option>
-                    </select>
-                  </label>
-                </div>
-              </div>
+      <form
+        onSubmit={handleSubmit}
+        className="bg-white dark:bg-slate-900 shadow-sm border border-primary/5 rounded-xl overflow-hidden"
+      >
+        <div className="p-8 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-3 mb-6">
+            <Icon name="person" className="text-primary" />
+            <h3 className="text-2xl font-bold">Tell us about yourself</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-semibold">Age</span>
+              <input
+                type="number"
+                min="1"
+                value={form.age}
+                onChange={(e) => setForm((prev) => ({ ...prev, age: e.target.value }))}
+                placeholder="e.g. 28"
+                className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+              />
+            </label>
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-semibold">Height (cm)</span>
+              <input
+                type="number"
+                min="1"
+                value={form.height_cm}
+                onChange={(e) => setForm((prev) => ({ ...prev, height_cm: e.target.value }))}
+                placeholder="175"
+                className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+              />
+            </label>
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-semibold">Weight (kg)</span>
+              <input
+                type="number"
+                min="1"
+                value={form.weight_kg}
+                onChange={(e) => setForm((prev) => ({ ...prev, weight_kg: e.target.value }))}
+                placeholder="72"
+                className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+              />
+            </label>
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-semibold">Activity Level</span>
+              <select
+                value={form.activity_level}
+                onChange={(e) => setForm((prev) => ({ ...prev, activity_level: e.target.value }))}
+                className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+              >
+                <option value="sedentary">Sedentary</option>
+                <option value="light">Lightly Active</option>
+                <option value="moderate">Moderately Active</option>
+                <option value="very_active">Very Active</option>
+              </select>
+            </label>
+          </div>
+        </div>
 
-              {/* Section 2: Health Goals */}
-              <div className="p-8 border-b border-slate-100 dark:border-slate-800">
-                <div className="flex items-center gap-3 mb-6">
-                  <Icon name="target" className="text-primary" />
-                  <h3 className="text-2xl font-bold">Health Goals</h3>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {[
-                    {
-                      icon: "trending_down",
-                      title: "Lose Weight",
-                      sub: "Fat loss focus",
-                    },
-                    {
-                      icon: "fitness_center",
-                      title: "Gain Muscle",
-                      sub: "Hypertrophy & strength",
-                    },
-                    {
-                      icon: "balance",
-                      title: "Maintenance",
-                      sub: "Stability & health",
-                    },
-                  ].map(({ icon, title, sub }) => (
-                    <label
-                      key={title}
-                      className="relative flex flex-col p-4 border-2 border-slate-100 dark:border-slate-800 rounded-xl cursor-pointer hover:border-primary/50 transition-all has-[:checked]:border-primary has-[:checked]:bg-primary/5"
-                    >
-                      <input
-                        type="radio"
-                        name="goal"
-                        defaultChecked={title === "Lose Weight"}
-                        className="absolute right-4 top-4 text-primary focus:ring-primary"
-                      />
-                      <Icon name={icon} className="text-primary mb-2" />
-                      <span className="font-bold">{title}</span>
-                      <span className="text-xs text-slate-500">{sub}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
+        <div className="p-8 border-b border-slate-100 dark:border-slate-800">
+          <h3 className="text-2xl font-bold mb-4">Health Goal</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[
+              { key: "lose_weight", title: "Lose Weight" },
+              { key: "gain_muscle", title: "Gain Muscle" },
+              { key: "maintenance", title: "Maintenance" },
+            ].map((goal) => (
+              <button
+                type="button"
+                key={goal.key}
+                onClick={() => setGoalType(goal.key)}
+                className={`rounded-xl border-2 p-4 text-left ${
+                  goalType === goal.key
+                    ? "border-primary bg-primary/10"
+                    : "border-slate-200 hover:border-primary/40"
+                }`}
+              >
+                <p className="font-bold">{goal.title}</p>
+              </button>
+            ))}
+          </div>
+        </div>
 
-              {/* Section 3: Dietary Preferences */}
-              <div className="p-8 border-b border-slate-100 dark:border-slate-800">
-                <div className="flex items-center gap-3 mb-6">
-                  <Icon name="restaurant" className="text-primary" />
-                  <h3 className="text-2xl font-bold">Dietary Preferences</h3>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">
-                      Diet Type
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {["Vegetarian", "Vegan", "Keto", "Paleo", "No Restrictions"].map(
-                        (diet) => (
-                          <button
-                            key={diet}
-                            type="button"
-                            className={`px-4 py-2 rounded-full border transition-colors ${
-                              diet === "No Restrictions"
-                                ? "bg-primary text-white border-primary"
-                                : "border-slate-200 dark:border-slate-700 hover:bg-primary hover:text-white"
-                            }`}
-                          >
-                            {diet}
-                          </button>
-                        )
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">
-                      Allergies & Restrictions
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {["Dairy-Free", "Gluten-Free", "Nut-Free", "Shellfish"].map(
-                        (item) => (
-                          <label
-                            key={item}
-                            className="flex items-center gap-2 px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-md text-sm"
-                          >
-                            <input
-                              type="checkbox"
-                              className="rounded text-primary focus:ring-primary"
-                            />
-                            {item}
-                          </label>
-                        )
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Section 4: Lifestyle */}
-              <div className="p-8">
-                <div className="flex items-center gap-3 mb-6">
-                  <Icon name="schedule" className="text-primary" />
-                  <h3 className="text-2xl font-bold">Lifestyle & Logistics</h3>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <label className="flex flex-col gap-2">
-                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                      Max Cooking Time (mins/meal)
-                    </span>
-                    <input
-                      type="range"
-                      min="5"
-                      max="120"
-                      step="5"
-                      defaultValue="30"
-                      className="accent-primary w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer"
-                    />
-                    <div className="flex justify-between text-xs text-slate-500">
-                      <span>5 mins</span>
-                      <span className="font-bold text-primary">30 mins</span>
-                      <span>2 hours</span>
-                    </div>
-                  </label>
-                  <label className="flex flex-col gap-2">
-                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                      Weekly Grocery Budget
-                    </span>
-                    <select className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-primary focus:border-primary p-3">
-                      <option>Budget-Friendly ($)</option>
-                      <option defaultChecked>Moderate ($$)</option>
-                      <option>Premium / Gourmet ($$$)</option>
-                    </select>
-                  </label>
-                  <div className="md:col-span-2 p-6 bg-primary/5 rounded-xl border border-primary/10">
-                    <p className="text-sm font-bold text-primary mb-4 flex items-center gap-2">
-                      <Icon name="auto_awesome" className="text-sm" />
-                      AI Predicted Daily Targets
-                    </p>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                      <div className="flex flex-col">
-                        <span className="text-xs text-slate-500 uppercase">
-                          Calories
-                        </span>
-                        <span className="text-xl font-bold">2,150</span>
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-xs text-slate-500 uppercase">
-                          Protein
-                        </span>
-                        <span className="text-xl font-bold">160g</span>
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-xs text-slate-500 uppercase">
-                          Carbs
-                        </span>
-                        <span className="text-xl font-bold">210g</span>
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-xs text-slate-500 uppercase">
-                          Fats
-                        </span>
-                        <span className="text-xl font-bold">72g</span>
-                      </div>
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-4 italic">
-                      *Preliminary estimates. You can adjust after profile
-                      creation.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Form Footer */}
-              <div className="p-8 bg-slate-50 dark:bg-slate-800/50 flex flex-col md:flex-row items-center justify-between gap-6">
-                <div className="flex items-center gap-3">
-                  <div className="size-2 rounded-full bg-primary animate-pulse" />
-                  <p className="text-sm text-slate-600 dark:text-slate-400">
-                    Your agent is ready to design your first meal plan.
-                  </p>
-                </div>
-                <Link
-                  href="/dashboard"
-                  className="w-full md:w-auto px-10 py-4 bg-primary text-white rounded-xl font-bold text-lg hover:shadow-lg hover:shadow-primary/30 transition-all flex items-center justify-center gap-2 group"
-                >
-                  Create My Nutrition Profile
-                  <Icon
-                    name="arrow_forward"
-                    className="group-hover:translate-x-1 transition-transform"
-                  />
-                </Link>
+        <div className="p-8 border-b border-slate-100 dark:border-slate-800">
+          <h3 className="text-2xl font-bold mb-4">Diet & Allergies</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <p className="text-sm font-semibold mb-3">Dietary Preferences</p>
+              <div className="flex flex-wrap gap-2">
+                {DIET_OPTIONS.map((item) => (
+                  <button
+                    type="button"
+                    key={item}
+                    onClick={() => toggleInList("dietary_preferences", item)}
+                    className={`px-3 py-1.5 rounded-full border text-sm ${
+                      form.dietary_preferences.includes(item)
+                        ? "bg-primary text-white border-primary"
+                        : "border-slate-200 hover:border-primary/50"
+                    }`}
+                  >
+                    {item}
+                  </button>
+                ))}
               </div>
             </div>
-
-            <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-8 px-4">
-              {[
-                {
-                  icon: "security",
-                  title: "Privacy First",
-                  desc: "Your biometric data is encrypted and never sold.",
-                },
-                {
-                  icon: "science",
-                  title: "Science Based",
-                  desc: "Mifflin-St Jeor equation and WHO guidelines.",
-                },
-                {
-                  icon: "support_agent",
-                  title: "24/7 Agent",
-                  desc: "Modify your plan anytime by chatting with your dietitian.",
-                },
-              ].map(({ icon, title, desc }) => (
-                <div key={title} className="flex gap-4">
-                  <div className="text-primary">
-                    <Icon name={icon} />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-sm">{title}</h4>
-                    <p className="text-xs text-slate-500">{desc}</p>
-                  </div>
-                </div>
-              ))}
+            <div>
+              <p className="text-sm font-semibold mb-3">Allergies</p>
+              <div className="flex flex-wrap gap-2">
+                {ALLERGY_OPTIONS.map((item) => (
+                  <button
+                    type="button"
+                    key={item}
+                    onClick={() => toggleInList("allergies", item)}
+                    className={`px-3 py-1.5 rounded-full border text-sm ${
+                      form.allergies.includes(item)
+                        ? "bg-red-500 text-white border-red-500"
+                        : "border-slate-200 hover:border-red-300"
+                    }`}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
             </div>
+          </div>
+        </div>
+
+        <div className="p-8 border-b border-slate-100 dark:border-slate-800 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <label className="flex flex-col gap-2">
+            <span className="text-sm font-semibold">Max cooking time (minutes)</span>
+            <input
+              type="number"
+              min="5"
+              max="180"
+              value={form.cook_time_preference_minutes}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, cook_time_preference_minutes: e.target.value }))
+              }
+              className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+            />
+          </label>
+          <label className="flex flex-col gap-2">
+            <span className="text-sm font-semibold">Weekly grocery budget ($)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.5"
+              value={form.budget_limit}
+              onChange={(e) => setForm((prev) => ({ ...prev, budget_limit: e.target.value }))}
+              className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+            />
+          </label>
+        </div>
+
+        <div className="p-8 bg-slate-50 dark:bg-slate-800/50 space-y-4">
+          <div className="p-4 rounded-xl border border-primary/20 bg-primary/5">
+            <p className="text-sm font-bold text-primary mb-2">Daily target preview</p>
+            <p className="text-sm text-slate-700 dark:text-slate-300">
+              Calories {targets.calories_target} • Protein {targets.protein_g_target}g • Carbs{" "}
+              {targets.carbs_g_target}g • Fat {targets.fat_g_target}g
+            </p>
+          </div>
+
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={saving || loading}
+            className="w-full md:w-auto px-10 py-4 bg-primary text-white rounded-xl font-bold text-lg disabled:opacity-50"
+          >
+            {saving ? "Saving..." : loading ? "Loading..." : "Create My Nutrition Profile"}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
