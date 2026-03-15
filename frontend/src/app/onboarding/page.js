@@ -324,7 +324,7 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(160deg,_#ecfdf5_0%,_#f7fdf9_40%,_#f0fdf4_100%)]">
+    <div className="w-full">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="relative overflow-hidden rounded-[34px] border border-white/70 bg-white/70 px-6 py-8 shadow-[0_30px_120px_-55px_rgba(15,23,42,0.4)] backdrop-blur xl:px-10">
           <div className="pointer-events-none absolute -left-24 top-8 h-56 w-56 rounded-full bg-emerald-200/45 blur-3xl" />
