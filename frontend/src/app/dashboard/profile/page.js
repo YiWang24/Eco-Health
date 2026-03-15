@@ -87,34 +87,34 @@ export default function ProfilePage() {
 
   return (
     <div className="mx-auto w-full max-w-[760px] flex flex-col gap-5 py-7 px-4 sm:px-5">
-      <section className="hero-reveal hero-delay-1 relative overflow-hidden rounded-3xl border border-emerald-200/80 bg-gradient-to-br from-emerald-950 via-slate-900 to-emerald-800 p-5 text-white shadow-[0_26px_70px_-36px_rgba(6,95,70,0.85)] sm:p-6">
-        <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-emerald-300/20 blur-3xl" aria-hidden />
-        <div className="absolute -bottom-24 left-14 h-56 w-56 rounded-full bg-cyan-300/20 blur-3xl" aria-hidden />
+      <section className="hero-reveal hero-delay-1 relative overflow-hidden rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-100 via-lime-50 to-emerald-200 p-5 text-emerald-950 shadow-[0_26px_70px_-42px_rgba(16,185,129,0.45)] sm:p-6">
+        <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-emerald-400/22 blur-3xl" aria-hidden />
+        <div className="absolute -bottom-24 left-14 h-56 w-56 rounded-full bg-teal-300/20 blur-3xl" aria-hidden />
         <div className="relative flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-white/18 text-2xl font-black uppercase text-white ring-1 ring-white/25">
+            <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-700 text-2xl font-black uppercase text-white ring-1 ring-emerald-800/20">
               {shortUserId ? shortUserId.slice(-2) : "U"}
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200">Personal Profile</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Personal Profile</p>
               <h1 className="text-3xl font-black tracking-tight">Account & Nutrition</h1>
             </div>
           </div>
-          <span className="rounded-full border border-white/25 bg-white/10 px-3 py-1 text-xs font-semibold tracking-wide text-emerald-100">
+          <span className="rounded-full border border-emerald-300 bg-white/70 px-3 py-1 text-xs font-semibold tracking-wide text-emerald-800">
             ID · ...{shortUserId || "unknown"}
           </span>
         </div>
         <div className="relative mt-5 grid grid-cols-3 gap-2.5 sm:gap-3">
-          <div className="rounded-2xl border border-white/20 bg-white/10 p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-100">Daily target</p>
-            <p className="mt-1 text-xl font-black">{goals?.calories_target ?? "-"}<span className="ml-1 text-xs font-semibold text-emerald-100">kcal</span></p>
+          <div className="rounded-2xl border border-emerald-200 bg-white/75 p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700">Daily target</p>
+            <p className="mt-1 text-xl font-black">{goals?.calories_target ?? "-"}<span className="ml-1 text-xs font-semibold text-emerald-700">kcal</span></p>
           </div>
-          <div className="rounded-2xl border border-white/20 bg-white/10 p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-100">Cook time</p>
-            <p className="mt-1 text-xl font-black">{goals?.max_cook_time_minutes ?? "-"}<span className="ml-1 text-xs font-semibold text-emerald-100">min</span></p>
+          <div className="rounded-2xl border border-emerald-200 bg-white/75 p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700">Cook time</p>
+            <p className="mt-1 text-xl font-black">{goals?.max_cook_time_minutes ?? "-"}<span className="ml-1 text-xs font-semibold text-emerald-700">min</span></p>
           </div>
-          <div className="rounded-2xl border border-white/20 bg-white/10 p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-100">Budget</p>
+          <div className="rounded-2xl border border-emerald-200 bg-white/75 p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700">Budget</p>
             <p className="mt-1 text-xl font-black">${goals?.budget_limit ?? "-"}</p>
           </div>
         </div>
